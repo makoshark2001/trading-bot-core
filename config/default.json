@@ -9,7 +9,7 @@
     }
   },
   "trading": {
-    "pairs": ["XMR"],
+    "pairs": ["XMR","RVN"],
     "dataRetention": 1440,
     "updateInterval": 300000
   },
