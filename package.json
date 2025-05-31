@@ -1,0 +1,45 @@
+{
+  "name": "trading-bot-core",
+  "version": "2.0.0",
+  "description": "Core infrastructure for Advanced Trading Bot - Data Collection & Technical Analysis",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/makoshark2001/trading-bot-core"
+  },
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "dev": "nodemon src/main.js",
+    "test": "echo \"Tests will be added later\"",
+    "setup": "node scripts/setup.js",
+    "test:api": "node scripts/test-api-client.js",
+    "test:data": "node scripts/test-data-collector.js",
+    "test:strategies": "node scripts/test-technical-strategies.js",
+    "test:all": "npm run test:api && npm run test:data && npm run test:strategies"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "got": "^11.8.6",
+    "dotenv": "^16.3.1",
+    "config": "^3.3.9",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "trading",
+    "bot", 
+    "cryptocurrency",
+    "technical-analysis",
+    "xeggex",
+    "core",
+    "indicators"
+  ],
+  "author": "HTMauney",
+  "license": "ISC",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}

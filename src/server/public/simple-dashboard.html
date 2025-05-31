@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Bot Dashboard - Compatible</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        body { 
+            background-color: #0d1117; 
+            color: #f0f6fc; 
+            font-family: Arial, sans-serif;
+            overflow-x: hidden;
+        }
+        .container-fluid {
+            max-width: 100vw;
+            overflow-x: hidden;
+        }
+        .card { 
+            background-color: #161b22; 
+            border: 1px solid #30363d;
+            color: #f0f6fc; 
+            overflow: hidden;
+        }
+        .card-body {
+            overflow: hidden;
+            padding: 1rem;
+        }
+        .card-header {
+            background-color: #21262d;
+            border-bottom: 1px solid #30363d;
+        }
+        .badge-buy { background-color: #238636; }
+        .badge-sell { background-color: #da3633; }
+        .badge-hold { background-color: #9a6700; }
+        .text-success { color: #3fb950 !important; }
+        .text-danger { color: #f85149 !important; }
+        .text-warning { color: #d29922 !important; }
+        .strategy-table { font-size: 0.85rem; }
+        .price-chart { 
+            height: 200px; 
+            width: 100% !important;
+            max-width: 100%;
+        }
+        .indicator-chart { 
+            height: 100px; 
+            width: 100% !important;
+            max-width: 100%;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+        }
+        .status-online { color: #3fb950; }
+        .status-offline { color: #f85149; }
+        .navbar-dark { background-color: #21262d !important; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark navbar-expand-lg mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">🚀 Trading Bot</span>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-link">
+                    <span id="status-indicator" class="status-offline">●</span>
+                    <span id="uptime">00:00:00</span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <!-- System Status -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📊 System Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Status:</strong>
+                                <span id="data-status" class="ms-2">Loading...</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Data Points:</strong>
+                                <span id="total-data-points" class="ms-2">0</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>API:</strong>
+                                <span id="api-status" class="ms-2">Loading...</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Last Update:</strong>
+                                <span id="last-update" class="ms-2">Never</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trading Pairs -->
+        <div class="row" id="pairs-container">
+            <!-- Pairs will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        var charts = {};
+        var isOnline = false;
+
+        function updateDashboard() {
+            fetch('/api/data')
+                .then(function(response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.json();
+                })
+                .then(function(data) {
+                    updateSystemStatus(data);
+                    updatePairs(data);
+                    
+                    if (!isOnline) {
+                        isOnline = true;
+                        document.getElementById('status-indicator').className = 'status-online';
+                        console.log('✅ Connected to trading bot');
+                    }
+                })
+                .catch(function(error) {
+                    console.error('❌ Failed to update dashboard:', error);
+                    if (isOnline) {
+                        isOnline = false;
+                        document.getElementById('status-indicator').className = 'status-offline';
+                    }
+                });
+        }
+
+        function updateSystemStatus(data) {
+            document.getElementById('uptime').textContent = data.uptime || '00:00:00';
+            document.getElementById('total-data-points').textContent = 
+                (data.stats && data.stats.dataCollection && data.stats.dataCollection.totalDataPoints) || 0;
+            document.getElementById('data-status').textContent = 
+                (data.stats && data.stats.dataCollection && data.stats.dataCollection.isCollecting) ? '🟢 Collecting' : '🔴 Stopped';
+            document.getElementById('api-status').textContent = '🟢 Connected';
+            document.getElementById('last-update').textContent = 
+                data.lastUpdate ? new Date(data.lastUpdate).toLocaleTimeString() : 'Never';
+        }
+
+        function updatePairs(data) {
+            var container = document.getElementById('pairs-container');
+            
+            data.pairs.forEach(function(pair) {
+                var pairCard = document.getElementById('pair-' + pair);
+                
+                if (!pairCard) {
+                    pairCard = createPairCard(pair);
+                    container.appendChild(pairCard);
+                }
+                
+                updatePairData(pair, data.history[pair], data.strategyResults[pair]);
+            });
+        }
+
+        function createPairCard(pair) {
+            var col = document.createElement('div');
+            col.className = 'col-lg-6 col-xl-4 mb-4';
+            col.id = 'pair-' + pair;
+            
+            col.innerHTML = 
+                '<div class="card h-100">' +
+                    '<div class="card-header d-flex justify-content-between align-items-center">' +
+                        '<h6 class="mb-0">' + pair + '/USDT</h6>' +
+                        '<span class="badge bg-secondary" id="price-' + pair + '">Loading...</span>' +
+                    '</div>' +
+                    '<div class="card-body">' +
+                        '<div class="chart-container mb-3">' +
+                            '<canvas id="chart-' + pair + '" class="price-chart"></canvas>' +
+                        '</div>' +
+                        '<div class="table-responsive">' +
+                            '<table class="table table-sm strategy-table">' +
+                                '<tbody id="strategies-' + pair + '">' +
+                                    '<tr><td>Loading...</td><td></td><td></td></tr>' +
+                                '</tbody>' +
+                            '</table>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            
+            return col;
+        }
+
+        function updatePairData(pair, history, strategies) {
+            if (!history || !history.closes || history.closes.length === 0) {
+                return;
+            }
+            
+            // Update price
+            var latestPrice = history.closes[history.closes.length - 1];
+            var priceElement = document.getElementById('price-' + pair);
+            if (priceElement) {
+                priceElement.textContent = '$' + latestPrice.toFixed(6);
+                
+                if (history.closes.length > 1) {
+                    var prevPrice = history.closes[history.closes.length - 2];
+                    if (latestPrice > prevPrice) {
+                        priceElement.className = 'badge bg-success';
+                    } else if (latestPrice < prevPrice) {
+                        priceElement.className = 'badge bg-danger';
+                    } else {
+                        priceElement.className = 'badge bg-secondary';
+                    }
+                }
+            }
+            
+            // Update price chart
+            updatePriceChart(pair, history);
+            
+            // Update strategy table
+            updateStrategyTable(pair, strategies);
+        }
+
+        function updatePriceChart(pair, history) {
+            var ctx = document.getElementById('chart-' + pair);
+            if (!ctx) return;
+            
+            var labels = history.timestamps.slice(-50).map(function(t) {
+                return new Date(t).toLocaleTimeString();
+            });
+            var prices = history.closes.slice(-50);
+            
+            if (charts['price-' + pair]) {
+                charts['price-' + pair].data.labels = labels;
+                charts['price-' + pair].data.datasets[0].data = prices;
+                charts['price-' + pair].update('none');
+            } else {
+                charts['price-' + pair] = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Price',
+                            data: prices,
+                            borderColor: '#3fb950',
+                            backgroundColor: 'rgba(63, 185, 80, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: { display: false },
+                            y: { 
+                                beginAtZero: false,
+                                grid: { color: '#30363d' },
+                                ticks: { color: '#8b949e', maxTicksLimit: 5 }
+                            }
+                        },
+                        elements: {
+                            point: { radius: 0, hoverRadius: 4 },
+                            line: { borderWidth: 2 }
+                        },
+                        animation: { duration: 0 }
+                    }
+                });
+            }
+        }
+
+        function updateStrategyTable(pair, strategies) {
+            var tbody = document.getElementById('strategies-' + pair);
+            if (!tbody) return;
+            
+            if (!strategies) {
+                tbody.innerHTML = '<tr><td>No data</td><td></td><td></td></tr>';
+                return;
+            }
+            
+            var html = '';
+            
+            // RSI
+            if (strategies.rsi) {
+                var rsi = strategies.rsi;
+                var rsiSuggestion = rsi.suggestion || 'hold';
+                var rsiValue = rsi.value ? rsi.value.toFixed(1) : 'N/A';
+                var rsiConfidence = rsi.confidence ? (rsi.confidence * 100).toFixed(1) : '0';
+                
+                html += '<tr><td><strong>RSI:</strong></td><td><span class="badge badge-' + rsiSuggestion + '">' + 
+                        rsiSuggestion.toUpperCase() + '</span></td><td>' + rsiValue + '</td></tr>';
+                html += '<tr><td>RSI Conf:</td><td colspan="2">' + rsiConfidence + '%</td></tr>';
+            }
+            
+            // MACD
+            if (strategies.macd) {
+                var macd = strategies.macd;
+                var macdSuggestion = macd.suggestion || 'hold';
+                var macdHistogram = macd.histogram ? macd.histogram.toFixed(6) : 'N/A';
+                var macdConfidence = macd.confidence ? (macd.confidence * 100).toFixed(1) : '0';
+                
+                html += '<tr><td><strong>MACD:</strong></td><td><span class="badge badge-' + macdSuggestion + '">' + 
+                        macdSuggestion.toUpperCase() + '</span></td><td>' + macdHistogram + '</td></tr>';
+                html += '<tr><td>MACD Conf:</td><td colspan="2">' + macdConfidence + '%</td></tr>';
+            }
+            
+            tbody.innerHTML = html;
+        }
+
+        // Start dashboard updates
+        setInterval(updateDashboard, 3000);
+        updateDashboard();
+        
+        console.log('🚀 Trading Bot Dashboard Loaded (Compatible Version)');
+    </script>
+</body>
+</html>

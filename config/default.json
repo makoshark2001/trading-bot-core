@@ -1,0 +1,24 @@
+{
+  "api": {
+    "xeggex": {
+      "baseUrl": "https://api.xeggex.com/api/v2",
+      "rateLimit": {
+        "requests": 100,
+        "window": 60000
+      }
+    }
+  },
+  "trading": {
+    "pairs": ["XMR"],
+    "dataRetention": 1440,
+    "updateInterval": 300000
+  },
+  "server": {
+    "port": 3000,
+    "updateInterval": 2000
+  },
+  "logging": {
+    "level": "info",
+    "file": "logs/app.log"
+  }
+}
