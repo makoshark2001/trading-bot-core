@@ -49,7 +49,7 @@ class TradingBotServer {
         
         // Main dashboard route
         this.app.get('/', (req, res) => {
-            res.sendFile(path.join(__dirname, 'public', 'simple-dashboard.html'));
+            res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
         });
         
         // API route for dashboard data
