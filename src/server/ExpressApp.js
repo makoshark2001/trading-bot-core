@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const path = require('path');
 const config = require('config');
 
 const { XeggexClient, MarketDataCollector } = require('../data/collectors');
@@ -44,12 +43,34 @@ class TradingBotServer {
     }
     
     setupRoutes() {
-        // Serve static files from public directory
-        this.app.use(express.static(path.join(__dirname, 'public')));
+        // Enable JSON parsing for API requests
+        this.app.use(express.json());
         
-        // Main dashboard route
+        // CORS headers for cross-service communication
+        this.app.use((req, res, next) => {
+            res.header('Access-Control-Allow-Origin', '*');
+            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+            res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            next();
+        });
+        
+        // API documentation root
         this.app.get('/', (req, res) => {
-            res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+            res.json({
+                service: 'Trading Bot Core API',
+                version: '2.0.0',
+                description: 'Market data collection and technical analysis engine',
+                endpoints: {
+                    health: '/api/health',
+                    data: '/api/data',
+                    pair: '/api/pair/:pair'
+                },
+                indicators: [
+                    'RSI', 'MACD', 'Bollinger Bands', 'Moving Average', 'Volume Analysis',
+                    'Stochastic', 'Williams %R', 'Ichimoku Cloud', 'ADX', 'CCI', 'Parabolic SAR'
+                ],
+                documentation: 'https://github.com/makoshark2001/trading-bot-core'
+            });
         });
         
         // API route for dashboard data
@@ -62,7 +83,8 @@ class TradingBotServer {
                     strategyResults: this.strategyResults,
                     stats: this.getSystemStats(),
                     status: 'running',
-                    lastUpdate: this.lastUpdate
+                    lastUpdate: this.lastUpdate,
+                    timestamp: Date.now()
                 };
                 
                 res.json(data);
@@ -70,7 +92,8 @@ class TradingBotServer {
                 Logger.error('Error in /api/data endpoint', { error: error.message });
                 res.status(500).json({ 
                     error: 'Internal server error',
-                    message: error.message 
+                    message: error.message,
+                    timestamp: Date.now()
                 });
             }
         });
@@ -83,20 +106,30 @@ class TradingBotServer {
                 const strategies = this.strategyResults[pair];
                 
                 if (!history) {
-                    return res.status(404).json({ error: 'Pair not found' });
+                    return res.status(404).json({ 
+                        error: 'Pair not found',
+                        pair: pair,
+                        availablePairs: config.get('trading.pairs'),
+                        timestamp: Date.now()
+                    });
                 }
                 
                 res.json({
                     pair,
                     history,
                     strategies,
-                    hasEnoughData: this.technicalStrategies.hasEnoughData(history)
+                    hasEnoughData: this.technicalStrategies.hasEnoughData(history),
+                    timestamp: Date.now()
                 });
             } catch (error) {
                 Logger.error(`Error getting data for pair ${req.params.pair}`, { 
                     error: error.message 
                 });
-                res.status(500).json({ error: 'Internal server error' });
+                res.status(500).json({ 
+                    error: 'Internal server error',
+                    pair: req.params.pair,
+                    timestamp: Date.now()
+                });
             }
         });
         
@@ -108,6 +141,8 @@ class TradingBotServer {
                 
                 res.json({
                     status: 'healthy',
+                    service: 'Trading Bot Core',
+                    version: '2.0.0',
                     timestamp: Date.now(),
                     uptime: this.getUptime(),
                     api: apiHealth,
@@ -115,16 +150,73 @@ class TradingBotServer {
                         isCollecting: dataStats.isCollecting,
                         totalDataPoints: dataStats.totalDataPoints,
                         successfulUpdates: dataStats.successfulUpdates,
-                        failedUpdates: dataStats.failedUpdates
+                        failedUpdates: dataStats.failedUpdates,
+                        pairs: dataStats.pairs,
+                        dataPointsPerPair: dataStats.dataPointsPerPair
+                    },
+                    indicators: {
+                        available: Object.keys(this.technicalStrategies.indicators),
+                        count: Object.keys(this.technicalStrategies.indicators).length
                     }
                 });
             } catch (error) {
                 res.status(500).json({
                     status: 'unhealthy',
+                    service: 'Trading Bot Core',
                     error: error.message,
                     timestamp: Date.now()
                 });
             }
+        });
+        
+        // API route for specific indicator data
+        this.app.get('/api/pair/:pair/indicator/:indicator', (req, res) => {
+            try {
+                const pair = req.params.pair.toUpperCase();
+                const indicator = req.params.indicator.toLowerCase();
+                
+                const strategies = this.strategyResults[pair];
+                if (!strategies || !strategies[indicator]) {
+                    return res.status(404).json({
+                        error: 'Indicator data not found',
+                        pair: pair,
+                        indicator: indicator,
+                        availableIndicators: strategies ? Object.keys(strategies) : [],
+                        timestamp: Date.now()
+                    });
+                }
+                
+                res.json({
+                    pair,
+                    indicator,
+                    data: strategies[indicator],
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                Logger.error(`Error getting ${req.params.indicator} for ${req.params.pair}`, {
+                    error: error.message
+                });
+                res.status(500).json({
+                    error: 'Internal server error',
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        // Catch-all for undefined routes
+        this.app.use('*', (req, res) => {
+            res.status(404).json({
+                error: 'Endpoint not found',
+                service: 'Trading Bot Core API',
+                availableEndpoints: [
+                    'GET /',
+                    'GET /api/health',
+                    'GET /api/data',
+                    'GET /api/pair/:pair',
+                    'GET /api/pair/:pair/indicator/:indicator'
+                ],
+                timestamp: Date.now()
+            });
         });
     }
     
@@ -158,6 +250,7 @@ class TradingBotServer {
                 this.strategyResults[pair] = this.technicalStrategies.calculateAll(data);
                 
                 Logger.debug(`Updated strategies for ${pair}`, {
+                    indicators: Object.keys(this.strategyResults[pair]),
                     rsiValue: this.strategyResults[pair].rsi?.value,
                     rsiSuggestion: this.strategyResults[pair].rsi?.suggestion
                 });
@@ -185,13 +278,14 @@ class TradingBotServer {
             dataCollection: dataStats,
             strategies: strategyStats,
             memory: process.memoryUsage(),
-            pairs: config.get('trading.pairs').length
+            pairs: config.get('trading.pairs').length,
+            indicators: Object.keys(this.technicalStrategies.indicators).length
         };
     }
     
     async start() {
         try {
-            Logger.info('Starting Trading Bot Server...');
+            Logger.info('Starting Trading Bot Core API Server...');
             
             // Initialize data collection
             await this.dataCollector.initialize();
@@ -204,9 +298,11 @@ class TradingBotServer {
             
             // Start HTTP server
             this.server = this.app.listen(this.port, () => {
-                Logger.info(`Trading Bot Server running at http://localhost:${this.port}`);
-                console.log(`🚀 Dashboard available at: http://localhost:${this.port}`);
-                console.log(`📊 API health check: http://localhost:${this.port}/api/health`);
+                Logger.info(`Trading Bot Core API Server running at http://localhost:${this.port}`);
+                console.log(`🚀 Trading Bot Core API available at: http://localhost:${this.port}`);
+                console.log(`📊 Health check: http://localhost:${this.port}/api/health`);
+                console.log(`📡 Market data: http://localhost:${this.port}/api/data`);
+                console.log(`🔍 Individual pair: http://localhost:${this.port}/api/pair/RVN`);
             });
             
         } catch (error) {
@@ -216,7 +312,7 @@ class TradingBotServer {
     }
     
     async stop() {
-        Logger.info('Stopping Trading Bot Server...');
+        Logger.info('Stopping Trading Bot Core API Server...');
         
         if (this.dataCollector) {
             this.dataCollector.stop();
@@ -226,7 +322,7 @@ class TradingBotServer {
             this.server.close();
         }
         
-        Logger.info('Trading Bot Server stopped');
+        Logger.info('Trading Bot Core API Server stopped');
     }
 }
 

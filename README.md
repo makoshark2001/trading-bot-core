@@ -1,732 +1,578 @@
-core# Trading Bot Core - Technical Manual
+# Trading Bot Core API
 
-## 🚀 Overview
+**Market Data Collection & Technical Analysis Engine**
 
-The **trading-bot-core** is the foundational service of the modular trading bot architecture, providing real-time cryptocurrency market data collection, comprehensive technical analysis, and RESTful API services. Operating on **Port 3000**, it serves as the primary data source for all other modules in the ecosystem.
+Core infrastructure providing real-time cryptocurrency market data collection, technical analysis, and RESTful API services for the trading bot ecosystem.
 
-### Key Capabilities
-- **Real-time Data Collection** from Xeggex cryptocurrency exchange
-- **11 Advanced Technical Indicators** with ensemble signal generation
-- **RESTful API** serving structured market data and analysis
-- **Advanced Web Dashboard** with real-time visualization
-- **Comprehensive Test Suite** with 16+ test scripts
-- **Production-Ready Architecture** with error handling and validation
+## 🎯 Purpose
 
----
+This is the **data and analysis engine** that powers the trading bot ecosystem. It provides:
+- Real-time cryptocurrency market data collection from Xeggex
+- 11 advanced technical indicators with ensemble analysis
+- RESTful API for market data and technical analysis
+- Signal generation and confidence scoring
 
-## 📊 Architecture Overview
+## 🏗️ Architecture Role
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    TRADING-BOT-CORE (Port 3000)            │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
-│  │   XeggexClient  │  │ MarketDataCollector │ │ TechnicalStrategies ││
-│  │                 │  │                 │  │                 ││
-│  │ • API Connection│  │ • Data Storage  │  │ • 11 Indicators ││
-│  │ • Rate Limiting │  │ • Real-time     │  │ • Ensemble      ││
-│  │ • Health Checks │  │   Updates       │  │   Signals       ││
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
-│                                 │                             │
-│  ┌─────────────────────────────────────────────────────────┐  │
-│  │              Express Server (Port 3000)                │  │
-│  │  • RESTful API Endpoints                               │  │
-│  │  • Real-time Dashboard                                 │  │
-│  │  • Health Monitoring                                   │  │
-│  │  • Data Validation                                     │  │
-│  └─────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                               │
-                    ┌──────────┼──────────┐
-                    │          │          │
-          ┌─────────▼─┐  ┌─────▼─────┐  ┌─▼──────────┐
-          │    ML     │  │ Backtest  │  │ Dashboard  │
-          │ Service   │  │ Service   │  │  Service   │
-          │(Port 3001)│  │(Port 3002)│  │(Port 3005) │
-          └───────────┘  └───────────┘  └────────────┘
-```
+This repository is **one component** of a larger trading bot ecosystem:
+- **Core** (this repo): Market data collection and technical analysis
+- **Dashboard**: Web interface and real-time visualization  
+- **ML**: Machine learning predictions and AI-enhanced signals
+- **Backtest**: Strategy testing and historical validation
+- **Risk**: Risk management and position sizing optimization
+- **Execution**: Trade execution and order management
 
----
+## 🚀 Features
 
-## 🛠️ Quick Start
+### Technical Indicators (11 Total)
+1. **RSI** (Relative Strength Index) - Momentum oscillator
+2. **MACD** (Moving Average Convergence Divergence) - Trend following
+3. **Bollinger Bands** - Volatility and mean reversion
+4. **Moving Average** - Trend direction and crossovers
+5. **Volume Analysis** - Volume-price relationship and OBV
+6. **Stochastic Oscillator** - Momentum and overbought/oversold
+7. **Williams %R** - Momentum oscillator
+8. **Ichimoku Cloud** - Comprehensive trend analysis
+9. **ADX** (Average Directional Index) - Trend strength
+10. **CCI** (Commodity Channel Index) - Momentum and reversal
+11. **Parabolic SAR** - Stop and reverse trend following
 
-### Prerequisites
-- **Node.js** >= 16.0.0
-- **npm** >= 8.0.0
-- **Xeggex API credentials** (optional, works without)
+### Signal Generation
+- Individual indicator signals with confidence scores
+- Ensemble signal generation combining all indicators
+- Weighted scoring system for signal strength
+- Metadata including interpretation and trend analysis
 
-### Installation
+### Market Data Collection
+- Real-time data collection from Xeggex API
+- Configurable update intervals and data retention
+- Automatic error handling and retry logic
+- Data validation and quality checks
 
-1. **Clone and Setup**
-```bash
-git clone <repository-url>
-cd trading-bot-core
-npm install
-```
-
-2. **Environment Configuration**
-```bash
-cp .env.example .env
-# Edit .env with your Xeggex API credentials (optional)
-```
-
-3. **Start the Service**
-```bash
-npm start
-```
-
-4. **Verify Installation**
-```bash
-# Check service health
-curl http://localhost:3000/api/health
-
-# Access web dashboard
-open http://localhost:3000
-```
-
----
-
-## 🔌 API Reference
-
-### Base URL
-```
-http://localhost:3000
-```
+## 📡 API Endpoints
 
 ### Core Endpoints
 
-#### 1. **GET /api/health**
-Service health check and system status.
+#### `GET /`
+Service information and API documentation
+```json
+{
+  "service": "Trading Bot Core API",
+  "version": "2.0.0",
+  "endpoints": {
+    "health": "/api/health",
+    "data": "/api/data", 
+    "pair": "/api/pair/:pair"
+  },
+  "indicators": ["RSI", "MACD", "Bollinger Bands", ...]
+}
+```
 
-**Response:**
+#### `GET /api/health`
+System health and status information
 ```json
 {
   "status": "healthy",
-  "timestamp": 1704067200000,
-  "uptime": "02:15:30",
-  "api": {
-    "healthy": true,
-    "timestamp": 1704067200000
-  },
+  "service": "Trading Bot Core",
+  "uptime": "02:45:30",
+  "api": { "healthy": true },
   "dataCollection": {
     "isCollecting": true,
-    "totalDataPoints": 15420,
-    "successfulUpdates": 1542,
-    "failedUpdates": 3
+    "totalDataPoints": 1250,
+    "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"]
+  },
+  "indicators": {
+    "available": ["rsi", "macd", "bollinger", ...],
+    "count": 11
   }
 }
 ```
 
-#### 2. **GET /api/data**
-Complete system data with all pairs and technical analysis.
-
-**Response:**
+#### `GET /api/data`
+All pairs with complete market data and technical analysis
 ```json
 {
-  "uptime": "02:15:30",
   "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
-  "history": {
-    "XMR": {
-      "closes": [158.45, 159.20, 157.80, ...],
-      "highs": [159.50, 160.10, 158.90, ...],
-      "lows": [157.20, 158.00, 156.50, ...],
-      "volumes": [1250.5, 1180.2, 1350.8, ...],
-      "timestamps": [1704067200000, 1704067500000, ...]
-    }
-  },
   "strategyResults": {
-    "XMR": {
+    "RVN": {
       "rsi": {
-        "value": 65.4,
+        "value": 45.2,
         "suggestion": "hold",
         "confidence": 0.3,
-        "metadata": { "interpretation": "Neutral zone" }
+        "strength": 0.25,
+        "metadata": {
+          "interpretation": "Neutral zone - no clear signal"
+        }
       },
-      "macd": { /* MACD results */ },
-      "bollinger": { /* Bollinger Bands results */ }
-      // ... all 11 indicators
+      "macd": {
+        "macdLine": 0.000123,
+        "signalLine": 0.000098,
+        "histogram": 0.000025,
+        "suggestion": "buy",
+        "confidence": 0.7,
+        "strength": 0.65
+      }
     }
   },
-  "stats": { /* System statistics */ },
-  "status": "running",
-  "lastUpdate": "2024-01-01T12:00:00.000Z"
+  "history": {
+    "RVN": {
+      "closes": [0.02434, 0.02441, ...],
+      "highs": [0.02445, 0.02450, ...],
+      "lows": [0.02430, 0.02435, ...],
+      "volumes": [15420, 16830, ...],
+      "timestamps": [1672531200000, ...]
+    }
+  },
+  "stats": { ... },
+  "uptime": "02:45:30",
+  "lastUpdate": "2025-01-15T10:30:45.123Z"
 }
 ```
 
-#### 3. **GET /api/pair/:pair**
-Individual pair data with complete technical analysis.
-
-**Parameters:**
-- `pair` (string): Trading pair symbol (e.g., "RVN", "XMR")
-
-**Response:**
+#### `GET /api/pair/:pair`
+Individual pair analysis and history
 ```json
 {
   "pair": "RVN",
   "history": {
-    "closes": [0.0234, 0.0235, 0.0233, ...],
-    "highs": [0.0236, 0.0237, 0.0235, ...],
-    "lows": [0.0232, 0.0233, 0.0231, ...],
-    "volumes": [125000, 118000, 135000, ...],
-    "timestamps": [1704067200000, 1704067500000, ...]
+    "closes": [0.02434, 0.02441, ...],
+    "highs": [0.02445, 0.02450, ...],
+    "lows": [0.02430, 0.02435, ...],
+    "volumes": [15420, 16830, ...],
+    "timestamps": [1672531200000, ...]
   },
   "strategies": {
-    "rsi": {
-      "value": 45.2,
-      "suggestion": "hold",
-      "confidence": 0.15,
-      "strength": 0.12,
-      "metadata": {
-        "avgGain": 0.000125,
-        "avgLoss": 0.000098,
-        "period": 14,
-        "interpretation": "Neutral zone - no clear signal"
-      }
-    },
-    "macd": {
-      "macdLine": 0.000045,
-      "signalLine": 0.000038,
-      "histogram": 0.000007,
-      "suggestion": "buy",
-      "confidence": 0.65,
-      "strength": 0.58,
-      "metadata": {
-        "interpretation": "Bullish MACD crossover",
-        "crossover": "bullish"
-      }
-    }
-    // ... all 11 indicators
+    "rsi": { ... },
+    "macd": { ... },
+    "bollinger": { ... }
   },
   "hasEnoughData": true
 }
 ```
 
----
+#### `GET /api/pair/:pair/indicator/:indicator`
+Specific indicator data for a pair
+```json
+{
+  "pair": "RVN",
+  "indicator": "rsi",
+  "data": {
+    "value": 45.2,
+    "suggestion": "hold",
+    "confidence": 0.3,
+    "strength": 0.25,
+    "metadata": {
+      "avgGain": 0.000123,
+      "avgLoss": 0.000098,
+      "period": 14,
+      "interpretation": "Neutral zone - no clear signal"
+    }
+  }
+}
+```
 
-## 📈 Technical Indicators
+## 🛠️ Installation & Setup
 
-The core service provides 11 advanced technical indicators with ensemble analysis:
+### Prerequisites
+- Node.js >= 16.0.0
+- npm >= 8.0.0
 
-### 1. **RSI (Relative Strength Index)**
-- **Period**: 14 (configurable)
-- **Signals**: Overbought (>70), Oversold (<30)
-- **Output**: Value, suggestion, confidence, interpretation
+### Installation
+```bash
+git clone https://github.com/makoshark2001/trading-bot-core
+cd trading-bot-core
+npm install
+```
 
-### 2. **MACD (Moving Average Convergence Divergence)**
-- **Parameters**: Fast(12), Slow(26), Signal(9)
-- **Signals**: Line crossovers, histogram momentum
-- **Output**: MACD line, signal line, histogram, crossover type
+### Configuration
+```bash
+cp .env.example .env
+# Edit .env with your API credentials
+```
 
-### 3. **Bollinger Bands**
-- **Parameters**: Period(20), Standard Deviation(2)
-- **Signals**: Price position vs bands, bandwidth analysis
-- **Output**: Upper/lower bands, %B, bandwidth, squeeze detection
+Required environment variables:
+```bash
+X_API=your_xeggex_api_key_here
+X_SECRET=your_xeggex_api_secret_here
+NODE_ENV=development
+LOG_LEVEL=info
+```
 
-### 4. **Moving Average Crossover**
-- **Parameters**: Fast(10), Slow(21)
-- **Signals**: Golden cross, death cross
-- **Output**: Fast/slow MA values, crossover detection, trend
+### Start the API Server
+```bash
+# Production
+npm start
 
-### 5. **Volume Analysis**
-- **Parameters**: Period(20)
-- **Signals**: Volume spikes, OBV, VPT analysis
-- **Output**: Volume ratio, trend, confirmation strength
+# Development with auto-reload
+npm run dev
+```
 
-### 6. **Stochastic Oscillator**
-- **Parameters**: %K(14), %D(3)
-- **Signals**: Overbought/oversold with crossovers
-- **Output**: %K, %D values, crossover detection
+The API will be available at `http://localhost:3000`
 
-### 7. **Williams %R**
-- **Parameters**: Period(14)
-- **Signals**: Momentum reversals, overbought/oversold
-- **Output**: %R value, level interpretation
+## 🧪 Testing
 
-### 8. **Ichimoku Cloud**
-- **Parameters**: Tenkan(9), Kijun(26), Senkou B(52)
-- **Signals**: Cloud analysis, line crossovers
-- **Output**: All lines, cloud color, trend strength
+### Run All Tests
+```bash
+npm run test:all
+```
 
-### 9. **ADX (Average Directional Index)**
-- **Parameters**: Period(14)
-- **Signals**: Trend strength measurement
-- **Output**: ADX, +DI, -DI, trend direction
+### Individual Test Suites
+```bash
+npm run test:api          # Test API client
+npm run test:data         # Test data collection
+npm run test:strategies   # Test technical indicators
+```
 
-### 10. **CCI (Commodity Channel Index)**
-- **Parameters**: Period(20)
-- **Signals**: Extreme price movements
-- **Output**: CCI value, level interpretation
+### Manual API Testing
+```bash
+# Health check
+curl http://localhost:3000/api/health
 
-### 11. **Parabolic SAR**
-- **Parameters**: Initial AF(0.02), Max AF(0.2)
-- **Signals**: Trend following, reversal points
-- **Output**: SAR value, trend direction, reversal detection
+# Get all market data
+curl http://localhost:3000/api/data
 
-### Ensemble Analysis
-The core combines all indicators to generate consensus signals:
-- **Buy Score**: Weighted sum of bullish signals
-- **Sell Score**: Weighted sum of bearish signals
-- **Confidence**: Overall signal strength
-- **Valid Strategies**: Number of indicators with sufficient data
+# Get specific pair
+curl http://localhost:3000/api/pair/RVN
 
----
+# Get specific indicator
+curl http://localhost:3000/api/pair/RVN/indicator/rsi
+```
 
 ## 🔧 Configuration
 
-### Environment Variables (.env)
-```bash
-# API Credentials (optional)
-X_API=your_xeggex_api_key_here
-X_SECRET=your_xeggex_api_secret_here
-
-# Environment
-NODE_ENV=development
-
-# Server Configuration
-PORT=3000
-HOST=localhost
-
-# Logging
-LOG_LEVEL=info
-
-# Trading Configuration
-TRADING_ENABLED=false
-PAPER_TRADING=true
-MAX_POSITIONS=3
+### Trading Pairs
+Edit `config/default.json`:
+```json
+{
+  "trading": {
+    "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
+    "updateInterval": 300000,
+    "dataRetention": 1440
+  }
+}
 ```
 
-### Configuration Files
+### Technical Indicators
+All indicators are configurable with custom periods and parameters. See individual indicator files in `src/strategies/technical/indicators/`.
 
-#### config/default.json
+## 🔗 Integration Examples
+
+### Consuming the API from Other Services
+
+#### JavaScript/Node.js
+```javascript
+const CORE_API_URL = 'http://localhost:3000';
+
+// Get market data
+async function getMarketData() {
+  const response = await fetch(`${CORE_API_URL}/api/data`);
+  return response.json();
+}
+
+// Get specific pair analysis
+async function getPairAnalysis(pair) {
+  const response = await fetch(`${CORE_API_URL}/api/pair/${pair}`);
+  return response.json();
+}
+
+// Get RSI for RVN
+async function getRSI(pair) {
+  const response = await fetch(`${CORE_API_URL}/api/pair/${pair}/indicator/rsi`);
+  return response.json();
+}
+```
+
+#### Python
+```python
+import requests
+
+CORE_API_URL = 'http://localhost:3000'
+
+def get_market_data():
+    response = requests.get(f'{CORE_API_URL}/api/data')
+    return response.json()
+
+def get_pair_analysis(pair):
+    response = requests.get(f'{CORE_API_URL}/api/pair/{pair}')
+    return response.json()
+```
+
+#### Dashboard Service Example
+```javascript
+// How a dashboard service would consume this API
+class TradingDashboard {
+  constructor() {
+    this.coreAPI = 'http://localhost:3000';
+  }
+  
+  async updateCharts() {
+    const data = await fetch(`${this.coreAPI}/api/data`);
+    const marketData = await data.json();
+    
+    // Update charts with technical analysis
+    this.updateCharts(marketData.strategyResults);
+    this.updatePriceData(marketData.history);
+  }
+}
+```
+
+## 🏗️ Architecture & Design
+
+### Event-Driven Data Processing
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Xeggex API    │───▶│ MarketDataCollector │───▶│ TechnicalStrategies │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌─────────────────┐    ┌─────────────────┐
+                       │   Data Storage  │    │ Signal Generation│
+                       └─────────────────┘    └─────────────────┘
+                                │                        │
+                                └────────┬───────────────┘
+                                         ▼
+                                ┌─────────────────┐
+                                │   REST API      │
+                                └─────────────────┘
+```
+
+### Data Flow
+1. **Market Data Collection**: Real-time data from Xeggex API
+2. **Data Validation**: Quality checks and error handling
+3. **Technical Analysis**: Calculate all 11 indicators
+4. **Signal Generation**: Ensemble analysis and confidence scoring
+5. **API Serving**: RESTful endpoints for other services
+
+### Microservice Architecture
+This core service is designed to be consumed by other specialized services:
+- **Stateless**: No session management, pure API
+- **Scalable**: Can handle multiple concurrent requests
+- **Focused**: Single responsibility (data + analysis)
+- **Independent**: Runs standalone without dependencies on other services
+
+## 📊 Data Structures
+
+### Technical Indicator Response Format
+```javascript
+{
+  "value": 45.2,              // Primary indicator value
+  "suggestion": "hold",       // Trading suggestion: buy/sell/hold  
+  "confidence": 0.3,          // Confidence score (0-1)
+  "strength": 0.25,           // Signal strength (0-1)
+  "metadata": {               // Indicator-specific metadata
+    "period": 14,
+    "interpretation": "Neutral zone - no clear signal",
+    // ... additional indicator-specific fields
+  }
+}
+```
+
+### Market Data Format
+```javascript
+{
+  "closes": [0.02434, 0.02441, ...],     // Closing prices
+  "highs": [0.02445, 0.02450, ...],      // High prices
+  "lows": [0.02430, 0.02435, ...],       // Low prices  
+  "volumes": [15420, 16830, ...],        // Trading volumes
+  "timestamps": [1672531200000, ...]     // Unix timestamps
+}
+```
+
+## 🔧 Advanced Configuration
+
+### Custom Indicator Periods
+```javascript
+// Modify indicator periods in TechnicalStrategies.js
+constructor() {
+  this.indicators = {
+    rsi: new RSI(21),           // Custom 21-period RSI
+    macd: new MACD(8, 21, 5),   // Custom MACD parameters
+    bollinger: new BollingerBands(15, 2.5), // Custom Bollinger settings
+    // ... other indicators
+  };
+}
+```
+
+### Rate Limiting Configuration
 ```json
 {
   "api": {
     "xeggex": {
-      "baseUrl": "https://api.xeggex.com/api/v2",
       "rateLimit": {
         "requests": 100,
         "window": 60000
       }
     }
-  },
+  }
+}
+```
+
+### Data Retention Settings
+```json
+{
   "trading": {
-    "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
-    "dataRetention": 1440,
-    "updateInterval": 300000
-  },
-  "server": {
-    "port": 3000,
-    "updateInterval": 2000
-  },
-  "logging": {
-    "level": "info",
-    "file": "logs/app.log"
+    "dataRetention": 1440,     // Keep 1440 data points (5 days at 5min intervals)
+    "updateInterval": 300000   // Update every 5 minutes
   }
 }
 ```
 
----
+## 🚨 Error Handling
 
-## 📊 Data Structures
-
-### Market Data Format
+### API Error Responses
 ```javascript
-// Historical data structure
+// 404 - Pair not found
 {
-  closes: [Number],    // Closing prices
-  highs: [Number],     // High prices  
-  lows: [Number],      // Low prices
-  volumes: [Number],   // Trading volumes
-  timestamps: [Number] // Unix timestamps
+  "error": "Pair not found",
+  "pair": "INVALID",
+  "availablePairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
+  "timestamp": 1672531200000
+}
+
+// 500 - Internal server error
+{
+  "error": "Internal server error",
+  "message": "Calculation failed",
+  "timestamp": 1672531200000
+}
+
+// 404 - Endpoint not found
+{
+  "error": "Endpoint not found",
+  "service": "Trading Bot Core API",
+  "availableEndpoints": ["GET /", "GET /api/health", ...],
+  "timestamp": 1672531200000
 }
 ```
 
-### Technical Indicator Output
+### Health Check Failure
 ```javascript
-// Standard indicator response
 {
-  suggestion: "buy" | "sell" | "hold",
-  confidence: Number,  // 0.0 to 1.0
-  strength: Number,    // 0.0 to 1.0
-  metadata: {
-    interpretation: String,
-    // Indicator-specific fields
-  }
+  "status": "unhealthy",
+  "service": "Trading Bot Core",
+  "error": "API connection failed",
+  "timestamp": 1672531200000
 }
 ```
 
-### Strategy Results Format
-```javascript
-// Complete strategy analysis
-{
-  [indicatorName]: {
-    // Indicator-specific values
-    suggestion: String,
-    confidence: Number,
-    strength: Number,
-    metadata: Object,
-    error?: String  // If calculation failed
-  }
-}
-```
+## 📈 Performance
 
----
+### Optimization Features
+- **In-memory data storage** for fast indicator calculations
+- **Event-driven updates** to minimize unnecessary recalculations
+- **Configurable data retention** to manage memory usage
+- **Rate limiting** to respect API boundaries
+- **Connection pooling** for database operations
 
-## 🏗️ Integration Guide for Other Modules
+### Monitoring
+- Real-time health checks via `/api/health`
+- Memory usage tracking in system stats
+- API request success/failure rates
+- Data collection statistics and error rates
 
-### For ML Service (trading-bot-ml)
-
-#### Data Fetching
-```javascript
-const axios = require('axios');
-
-// Get all data for feature extraction
-const response = await axios.get('http://localhost:3000/api/data');
-const { pairs, history, strategyResults } = response.data;
-
-// Get specific pair data
-const pairData = await axios.get('http://localhost:3000/api/pair/RVN');
-const { history, strategies } = pairData.data;
-```
-
-#### Feature Engineering
-```javascript
-// Available features from core:
-// - 11 technical indicators with confidence scores
-// - Historical OHLCV data
-// - Ensemble signals
-// - Metadata and interpretations
-
-const features = {
-  // Price features
-  currentPrice: history.closes[history.closes.length - 1],
-  priceChange: /* calculate from history */,
-  
-  // Technical features
-  rsiValue: strategies.rsi.value,
-  rsiConfidence: strategies.rsi.confidence,
-  macdHistogram: strategies.macd.histogram,
-  bollingerPercentB: strategies.bollinger.percentB,
-  
-  // Ensemble features
-  ensembleSignal: /* calculate from all strategies */,
-  consensusStrength: /* measure agreement */
-};
-```
-
-### For Backtest Service (trading-bot-backtest)
-
-#### Historical Data Access
-```javascript
-// Get historical data for backtesting
-const response = await axios.get('http://localhost:3000/api/pair/RVN');
-const { history, strategies } = response.data;
-
-// Use for backtesting
-const backtestResults = await runBacktest({
-  pair: 'RVN',
-  data: history,
-  signals: strategies,
-  timeframe: '5m'
-});
-```
-
-#### Strategy Validation
-```javascript
-// Validate strategy signals
-const isValidStrategy = (strategies) => {
-  return Object.values(strategies).some(strategy => 
-    !strategy.error && strategy.confidence > 0.6
-  );
-};
-```
-
-### For Dashboard Service (trading-bot-dashboard)
-
-#### Real-time Data Display
-```javascript
-// Aggregate data from core
-const coreData = await axios.get('http://localhost:3000/api/data');
-
-const dashboardData = {
-  systemHealth: coreData.data.status,
-  totalPairs: coreData.data.pairs.length,
-  lastUpdate: coreData.data.lastUpdate,
-  
-  // Per-pair summaries
-  pairSummaries: coreData.data.pairs.map(pair => ({
-    pair,
-    price: coreData.data.history[pair].closes.slice(-1)[0],
-    signal: coreData.data.strategyResults[pair].ensemble?.suggestion,
-    confidence: coreData.data.strategyResults[pair].ensemble?.confidence
-  }))
-};
-```
-
-### For Risk Management Service (trading-bot-risk)
-
-#### Risk Metrics Calculation
-```javascript
-// Use core data for risk analysis
-const allData = await axios.get('http://localhost:3000/api/data');
-
-const riskMetrics = {
-  volatility: calculateVolatility(allData.data.history),
-  correlations: calculateCorrelations(allData.data.pairs),
-  drawdowns: analyzeDrawdowns(allData.data.history),
-  signalReliability: assessSignalQuality(allData.data.strategyResults)
-};
-```
-
----
-
-## 🧪 Testing
-
-### Available Test Scripts
-```bash
-# Basic setup test
-npm run test:setup
-
-# API client functionality
-npm run test:api
-
-# Data collection system
-npm run test:data
-
-# Technical strategies
-npm run test:strategies
-
-# Run all tests
-npm run test:all
-```
-
-### Health Check Verification
-```bash
-# Quick health check
-curl http://localhost:3000/api/health
-
-# Data availability check
-curl http://localhost:3000/api/data | jq '.pairs'
-
-# Specific pair check
-curl http://localhost:3000/api/pair/RVN | jq '.strategies | keys'
-```
-
-### Performance Benchmarks
-- **API Response Time**: <50ms for individual pair data
-- **Data Collection**: 5-minute intervals for all pairs
-- **Technical Analysis**: <100ms for all 11 indicators
-- **Memory Usage**: ~150MB under normal load
-- **Data Retention**: 1440 data points (5 days at 5-min intervals)
-
----
-
-## 🔍 Monitoring & Debugging
-
-### Log Files
-```bash
-logs/
-├── app.log      # General application logs
-└── error.log    # Error-specific logs
-```
-
-### Debug Information
-```javascript
-// Enable debug logging
-LOG_LEVEL=debug npm start
-
-// Monitor data collection
-curl http://localhost:3000/api/health | jq '.dataCollection'
-
-// Check specific pair health
-curl http://localhost:3000/api/pair/RVN | jq '.hasEnoughData'
-```
-
-### Common Issues & Solutions
-
-#### 1. **No Data Collected**
-```bash
-# Check API credentials
-echo $X_API $X_SECRET
-
-# Verify network connectivity
-curl https://api.xeggex.com/api/v2/market/getlist
-
-# Check service logs
-tail -f logs/app.log
-```
-
-#### 2. **Technical Indicators Not Calculating**
-```bash
-# Verify sufficient data points
-curl http://localhost:3000/api/pair/RVN | jq '.history.closes | length'
-
-# Check for validation errors
-curl http://localhost:3000/api/pair/RVN | jq '.strategies | to_entries[] | select(.value.error)'
-```
-
-#### 3. **API Timeouts**
-```bash
-# Check rate limiting
-curl http://localhost:3000/api/health | jq '.api'
-
-# Monitor request frequency
-grep "Rate limit" logs/app.log
-```
-
----
-
-## 🚀 Performance Optimization
-
-### Data Management
-- **Automatic Data Trimming**: Maintains optimal memory usage
-- **Efficient Storage**: Time-series optimized data structures
-- **Smart Caching**: Reduces redundant calculations
-
-### API Optimization
-- **Response Compression**: Gzip enabled for large datasets
-- **Request Rate Limiting**: Prevents API overload
-- **Connection Pooling**: Efficient HTTP client management
-
-### Technical Analysis Optimization
-- **Incremental Calculations**: Only recalculate when new data arrives
-- **Vectorized Operations**: Batch processing for multiple indicators
-- **Error Isolation**: Failed indicators don't affect others
-
----
-
-## 🔒 Security & Production Considerations
+## 🔒 Security
 
 ### API Security
-- **Rate Limiting**: 100 requests per minute
-- **Input Validation**: All parameters sanitized
-- **Error Handling**: No sensitive data in error messages
+- CORS headers for cross-origin requests
+- Input validation for all parameters
+- Error message sanitization
+- Rate limiting on API endpoints
 
-### Production Deployment
-```bash
-# Production environment
-NODE_ENV=production npm start
+### Data Security
+- API credentials stored in environment variables
+- No sensitive data in logs or responses
+- Secure error handling without data leakage
 
-# Process management (recommended)
-npm install -g pm2
-pm2 start src/main.js --name trading-bot-core
+## 📚 Technical Documentation
 
-# Health monitoring
-pm2 monit
+### Project Structure
+```
+src/
+├── data/
+│   ├── collectors/
+│   │   ├── XeggexClient.js          # API client for Xeggex
+│   │   ├── MarketDataCollector.js   # Real-time data collection
+│   │   └── index.js
+│   └── validators/
+│       ├── DataValidator.js         # Data validation utilities
+│       └── index.js
+├── strategies/
+│   └── technical/
+│       ├── TechnicalStrategies.js   # Main strategy engine
+│       ├── indicators/              # Individual indicator implementations
+│       │   ├── RSI.js
+│       │   ├── MACD.js
+│       │   ├── BollingerBands.js
+│       │   ├── MovingAverage.js
+│       │   ├── Volume.js
+│       │   ├── Stochastic.js
+│       │   ├── WilliamsR.js
+│       │   ├── IchimokuCloud.js
+│       │   ├── ADX.js
+│       │   ├── CCI.js
+│       │   ├── ParabolicSAR.js
+│       │   └── index.js
+│       └── index.js
+├── utils/
+│   ├── Logger.js                    # Winston-based logging
+│   └── index.js
+├── server/
+│   └── ExpressApp.js                # Express API server
+└── main.js                          # Application entry point
 ```
 
-### Environment Isolation
-- **Separate API Keys**: Different credentials per environment
-- **Config Management**: Environment-specific configurations
-- **Log Separation**: Structured logging for production monitoring
+### Key Classes
+
+#### `TechnicalStrategies`
+Main engine for calculating all technical indicators and generating ensemble signals.
+
+#### `MarketDataCollector`
+Handles real-time data collection, storage, and event emission for new data.
+
+#### `XeggexClient`
+API client with rate limiting, error handling, and health checks.
+
+#### Individual Indicators
+Each indicator is implemented as a separate class with consistent interface:
+- `calculate(data)` - Main calculation method
+- `generateSignal()` - Trading signal generation
+- Validation and error handling
+
+## 🤝 Contributing
+
+### Adding New Indicators
+1. Create new indicator class in `src/strategies/technical/indicators/`
+2. Follow the existing indicator interface pattern
+3. Add to `TechnicalStrategies.js` indicators list
+4. Create comprehensive tests
+5. Update documentation
+
+### Code Standards
+- ESLint configuration for consistent formatting
+- Comprehensive error handling required
+- JSDoc comments for all public methods
+- Unit tests for all new functionality
+
+## 📜 License
+
+ISC License - See LICENSE file for details.
+
+## 🔗 Related Repositories
+
+- **[trading-bot-dashboard](https://github.com/makoshark2001/trading-bot-dashboard)** - Web interface and visualization
+- **[trading-bot-ml](https://github.com/makoshark2001/trading-bot-ml)** - Machine learning predictions  
+- **[trading-bot-backtest](https://github.com/makoshark2001/trading-bot-backtest)** - Strategy testing and validation
+- **[trading-bot-risk](https://github.com/makoshark2001/trading-bot-risk)** - Risk management and position sizing
+- **[trading-bot-execution](https://github.com/makoshark2001/trading-bot-execution)** - Trade execution and order management
+
+## 📞 Support
+
+For issues, questions, or contributions:
+- Create GitHub issues for bugs or feature requests
+- Check existing documentation before asking questions
+- Follow the contributing guidelines for pull requests
 
 ---
 
-## 📋 API Usage Examples
-
-### Complete Integration Example
-```javascript
-const axios = require('axios');
-
-class CoreServiceClient {
-  constructor(baseURL = 'http://localhost:3000') {
-    this.client = axios.create({ baseURL, timeout: 10000 });
-  }
-  
-  async getSystemStatus() {
-    const response = await this.client.get('/api/health');
-    return response.data;
-  }
-  
-  async getAllData() {
-    const response = await this.client.get('/api/data');
-    return response.data;
-  }
-  
-  async getPairAnalysis(pair) {
-    const response = await this.client.get(`/api/pair/${pair}`);
-    return response.data;
-  }
-  
-  async getEnsembleSignal(pair) {
-    const data = await this.getPairAnalysis(pair);
-    const strategies = data.strategies;
-    
-    let buyScore = 0, sellScore = 0, totalConfidence = 0;
-    let validStrategies = 0;
-    
-    Object.entries(strategies).forEach(([name, strategy]) => {
-      if (!strategy.error && strategy.confidence > 0) {
-        validStrategies++;
-        totalConfidence += strategy.confidence;
-        
-        if (strategy.suggestion === 'buy') {
-          buyScore += strategy.confidence;
-        } else if (strategy.suggestion === 'sell') {
-          sellScore += strategy.confidence;
-        }
-      }
-    });
-    
-    const avgConfidence = validStrategies > 0 ? totalConfidence / validStrategies : 0;
-    const signal = buyScore > sellScore ? 'BUY' : 
-                  sellScore > buyScore ? 'SELL' : 'HOLD';
-    
-    return {
-      pair,
-      signal,
-      confidence: avgConfidence,
-      buyScore,
-      sellScore,
-      validStrategies,
-      strategies
-    };
-  }
-}
-
-// Usage
-const core = new CoreServiceClient();
-
-// Get system health
-const health = await core.getSystemStatus();
-console.log('Core Service Status:', health.status);
-
-// Get trading signal
-const signal = await core.getEnsembleSignal('RVN');
-console.log('Trading Signal:', signal);
-```
-
----
-
-## 📚 Additional Resources
-
-### Related Documentation
-- **Trading-Bot-ML Integration**: See `trading-bot-ml/README.md`
-- **Backtest Service Integration**: See `trading-bot-backtest/README.md`
-- **Dashboard Integration**: See `trading-bot-dashboard/README.md`
-
-### External APIs
-- **Xeggex API Documentation**: https://api.xeggex.com/docs
-- **Technical Analysis Reference**: Standard TA indicators documentation
-
-### Support & Community
-- **GitHub Issues**: Report bugs and feature requests
-- **Wiki**: Extended documentation and examples
-- **Discussions**: Community support and strategy sharing
-
----
-
-## 📊 Version Information
-
-- **Current Version**: 2.0.0
-- **Node.js Compatibility**: >=16.0.0
-- **Last Updated**: January 2025
-- **API Stability**: Production Ready
-
-### Changelog
-- **v2.0.0**: Complete modular architecture, 11 indicators, RESTful API
-- **v1.x.x**: Legacy monolithic versions (deprecated)
-
----
-
-*This technical manual serves as the complete reference for integrating with the trading-bot-core service. For specific implementation examples, refer to the existing integrations in trading-bot-ml, trading-bot-backtest, and trading-bot-dashboard repositories.*
+**Trading Bot Core API** - Market Data Collection & Technical Analysis Engine  
+*Part of the Trading Bot Ecosystem*
