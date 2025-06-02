@@ -1,1 +1,1 @@
-npm run pm2:start
+npm start
