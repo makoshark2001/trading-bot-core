@@ -9,7 +9,7 @@
     }
   },
   "trading": {
-    "pairs": ["RVN"],
+    "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
     "dataRetention": 1440,
     "updateInterval": 300000
   },

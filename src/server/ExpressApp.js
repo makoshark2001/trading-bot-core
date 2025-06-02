@@ -63,6 +63,7 @@ class TradingBotServer {
                 endpoints: {
                     health: '/api/health',
                     data: '/api/data',
+                    pairs: '/api/pairs',
                     pair: '/api/pair/:pair'
                 },
                 indicators: [
@@ -93,6 +94,23 @@ class TradingBotServer {
                 res.status(500).json({ 
                     error: 'Internal server error',
                     message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        // API route for available pairs list
+        this.app.get('/api/pairs', (req, res) => {
+            try {
+                res.json({
+                    pairs: config.get('trading.pairs'),
+                    total: config.get('trading.pairs').length,
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                Logger.error('Error in /api/pairs endpoint', { error: error.message });
+                res.status(500).json({ 
+                    error: 'Internal server error',
                     timestamp: Date.now()
                 });
             }
@@ -212,6 +230,7 @@ class TradingBotServer {
                     'GET /',
                     'GET /api/health',
                     'GET /api/data',
+                    'GET /api/pairs',
                     'GET /api/pair/:pair',
                     'GET /api/pair/:pair/indicator/:indicator'
                 ],
@@ -302,6 +321,7 @@ class TradingBotServer {
                 console.log(`🚀 Trading Bot Core API available at: http://localhost:${this.port}`);
                 console.log(`📊 Health check: http://localhost:${this.port}/api/health`);
                 console.log(`📡 Market data: http://localhost:${this.port}/api/data`);
+                console.log(`📋 Available pairs: http://localhost:${this.port}/api/pairs`);
                 console.log(`🔍 Individual pair: http://localhost:${this.port}/api/pair/RVN`);
             });
             
