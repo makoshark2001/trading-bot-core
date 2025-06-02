@@ -122,6 +122,50 @@ class XeggexClient extends EventEmitter {
         return this.makeRequest("market/getlist");
     }
     
+    async getUSDTPairs() {
+        try {
+            const markets = await this.getMarkets();
+            
+            if (!markets || !Array.isArray(markets)) {
+                throw new Error('Invalid markets response');
+            }
+            
+            // Filter for USDT pairs and extract the base currency
+            const usdtPairs = markets
+                .filter(market => {
+                    // Check if symbol ends with _USDT and is active
+                    return market.symbol && 
+                           market.symbol.endsWith('/USDT') && 
+                           market.isActive !== false; // Include if isActive is true or undefined
+                })
+                .map(market => {
+                    // Extract the base currency (everything before _USDT)
+                    const baseCurrency = market.symbol.replace('/USDT', '');
+                    return {
+                        pair: baseCurrency,
+                        symbol: market.symbol,
+                        name: market.primaryCurrencyName || baseCurrency,
+                        lastPrice: market.lastPrice ? parseFloat(market.lastPrice) : null,
+                        volume24h: market.volume ? parseFloat(market.volume) : null,
+                        change24h: market.change ? parseFloat(market.change) : null,
+                        isActive: market.isActive
+                    };
+                })
+                .sort((a, b) => a.pair.localeCompare(b.pair)); // Sort alphabetically
+            
+            Logger.debug('Retrieved USDT pairs', {
+                totalPairs: usdtPairs.length,
+                samplePairs: usdtPairs.slice(0, 5).map(p => p.pair)
+            });
+            
+            return usdtPairs;
+            
+        } catch (error) {
+            Logger.error('Failed to get USDT pairs', { error: error.message });
+            throw error;
+        }
+    }
+    
     async getOrderBook(symbol) {
         const encodedSymbol = encodeURIComponent(symbol);
         return this.makeRequest(`market/getorderbookbysymbol/${encodedSymbol}`);

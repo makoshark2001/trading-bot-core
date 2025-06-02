@@ -19,7 +19,8 @@
     "test:storage": "node scripts/test-persistent-storage.js",
     "test:storage-diag": "node scripts/test-storage-diagnostics.js",
     "test:debug-xmr": "node scripts/debug-xmr-issue.js",
-    "test:all": "npm run test:setup && npm run test:api && npm run test:storage && npm run test:data && npm run test:strategies && npm run test:pairs",
+    "test:available-pairs": "node scripts/test-available-pairs.js",
+    "test:all": "npm run test:setup && npm run test:api && npm run test:storage && npm run test:data && npm run test:strategies && npm run test:pairs && npm run test:available-pairs",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop trading-bot-core",
     "pm2:restart": "pm2 restart trading-bot-core",
@@ -27,25 +28,27 @@
     "pm2:status": "pm2 status"
   },
   "dependencies": {
+    "config": "^3.3.9",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "got": "^11.8.6",
-    "dotenv": "^16.3.1",
-    "config": "^3.3.9",
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "node-fetch": "^2.7.0",
     "nodemon": "^3.0.2"
   },
   "keywords": [
     "trading",
-    "bot", 
+    "bot",
     "cryptocurrency",
     "technical-analysis",
     "xeggex",
     "core",
     "indicators",
     "dynamic-pairs",
-    "persistent-storage"
+    "persistent-storage",
+    "available-pairs"
   ],
   "author": "HTMauney",
   "license": "ISC",

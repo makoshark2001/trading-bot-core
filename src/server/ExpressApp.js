@@ -90,6 +90,7 @@ class TradingBotServer {
                     pairs: '/api/pairs',
                     pair: '/api/pair/:pair',
                     config: '/api/config',
+                    availablePairs: '/api/available-pairs',
                     updatePairs: 'PUT /api/config/pairs',
                     addPair: 'POST /api/config/pairs/add',
                     removePair: 'DELETE /api/config/pairs/:pair',
@@ -107,7 +108,8 @@ class TradingBotServer {
                     'Dynamic pair management', 
                     'Persistent local storage',
                     '11 technical indicators',
-                    'Ensemble signal generation'
+                    'Ensemble signal generation',
+                    'Available pairs discovery'
                 ],
                 documentation: 'https://github.com/makoshark2001/trading-bot-core'
             });
@@ -125,6 +127,37 @@ class TradingBotServer {
                 Logger.error('Error getting configuration', { error: error.message });
                 res.status(500).json({
                     error: 'Failed to get configuration',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        // Available pairs endpoint
+        this.app.get('/api/available-pairs', async (req, res) => {
+            try {
+                const availablePairs = await this.dataCollector.getAvailableUSDTPairs();
+                const currentPairs = await this.configManager.getCurrentPairs();
+                
+                // Mark which pairs are currently being tracked
+                const enrichedPairs = availablePairs.map(pair => ({
+                    ...pair,
+                    isTracked: currentPairs.includes(pair.pair),
+                    canAdd: !currentPairs.includes(pair.pair)
+                }));
+                
+                res.json({
+                    availablePairs: enrichedPairs,
+                    totalAvailable: availablePairs.length,
+                    currentlyTracked: currentPairs.length,
+                    canAdd: enrichedPairs.filter(p => p.canAdd).length,
+                    timestamp: Date.now()
+                });
+                
+            } catch (error) {
+                Logger.error('Error getting available pairs', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to get available trading pairs',
                     message: error.message,
                     timestamp: Date.now()
                 });
@@ -549,6 +582,7 @@ class TradingBotServer {
                     'GET /api/pair/:pair',
                     'GET /api/pair/:pair/indicator/:indicator',
                     'GET /api/config',
+                    'GET /api/available-pairs',
                     'PUT /api/config/pairs',
                     'POST /api/config/pairs/add',
                     'DELETE /api/config/pairs/:pair',
@@ -671,6 +705,7 @@ class TradingBotServer {
                 console.log(`📊 Health check: http://localhost:${this.port}/api/health`);
                 console.log(`📡 Market data: http://localhost:${this.port}/api/data`);
                 console.log(`📋 Available pairs: http://localhost:${this.port}/api/pairs`);
+                console.log(`🔍 Available trading pairs: http://localhost:${this.port}/api/available-pairs`);
                 console.log(`⚙️  Configuration: http://localhost:${this.port}/api/config`);
                 console.log(`🔍 Individual pair: http://localhost:${this.port}/api/pair/RVN`);
             });

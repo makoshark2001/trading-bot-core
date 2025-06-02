@@ -555,6 +555,16 @@ class MarketDataCollector extends EventEmitter {
         }
     }
     
+    // Get available USDT trading pairs from exchange
+    async getAvailableUSDTPairs() {
+        try {
+            return await this.apiClient.getUSDTPairs();
+        } catch (error) {
+            logger.error('Failed to get available USDT pairs', { error: error.message });
+            throw error;
+        }
+    }
+    
     // Getter methods
     getHistoryForPair(pair) {
         return this.history[pair] || null;
