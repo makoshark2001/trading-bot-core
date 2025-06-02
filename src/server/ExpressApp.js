@@ -4,7 +4,7 @@ const config = require('config');
 
 const { XeggexClient, MarketDataCollector } = require('../data/collectors');
 const { TechnicalStrategies } = require('../strategies/technical');
-const { Logger } = require('../utils');
+const { Logger, ConfigManager } = require('../utils');
 
 class TradingBotServer {
     constructor() {
@@ -15,31 +15,55 @@ class TradingBotServer {
         this.strategyResults = {};
         this.lastUpdate = null;
         
-        this.initializeServices();
         this.setupRoutes();
-        this.setupEventHandlers();
+        // Note: setupEventHandlers() is now called after services are initialized
     }
     
-    initializeServices() {
-        Logger.info('Initializing services...');
-        
-        // Initialize API client
-        this.apiClient = new XeggexClient(
-            process.env.X_API,
-            process.env.X_SECRET,
-            config.get('api.xeggex')
-        );
-        
-        // Initialize data collector
-        this.dataCollector = new MarketDataCollector(
-            this.apiClient,
-            config.get('trading')
-        );
-        
-        // Initialize technical strategies
-        this.technicalStrategies = new TechnicalStrategies();
-        
-        Logger.info('Services initialized successfully');
+    async initializeServices() {
+        try {
+            Logger.info('Initializing services...');
+            
+            // Initialize configuration manager
+            this.configManager = new ConfigManager();
+            Logger.debug('ConfigManager initialized');
+            
+            // Load current pairs configuration
+            const currentPairs = await this.configManager.getCurrentPairs();
+            Logger.info('Loaded current trading pairs', { pairs: currentPairs });
+            
+            // Initialize API client
+            this.apiClient = new XeggexClient(
+                process.env.X_API,
+                process.env.X_SECRET,
+                config.get('api.xeggex')
+            );
+            Logger.debug('XeggexClient initialized');
+            
+            // Initialize data collector with current pairs
+            const tradingConfig = {
+                ...config.get('trading'),
+                pairs: currentPairs  // Use dynamic pairs instead of static config
+            };
+            
+            this.dataCollector = new MarketDataCollector(this.apiClient, tradingConfig);
+            Logger.debug('MarketDataCollector initialized');
+            
+            // Initialize technical strategies
+            this.technicalStrategies = new TechnicalStrategies();
+            Logger.debug('TechnicalStrategies initialized');
+            
+            // Setup event handlers after all services are initialized
+            this.setupEventHandlers();
+            
+            Logger.info('Services initialized successfully');
+        } catch (error) {
+            const errorMessage = error && error.message ? error.message : 'Unknown error during service initialization';
+            Logger.error('Failed to initialize services', { 
+                error: errorMessage,
+                stack: error && error.stack ? error.stack : 'No stack trace available'
+            });
+            throw new Error(`Service initialization failed: ${errorMessage}`);
+        }
     }
     
     setupRoutes() {
@@ -59,12 +83,17 @@ class TradingBotServer {
             res.json({
                 service: 'Trading Bot Core API',
                 version: '2.0.0',
-                description: 'Market data collection and technical analysis engine',
+                description: 'Market data collection and technical analysis engine with dynamic pair management',
                 endpoints: {
                     health: '/api/health',
                     data: '/api/data',
                     pairs: '/api/pairs',
-                    pair: '/api/pair/:pair'
+                    pair: '/api/pair/:pair',
+                    config: '/api/config',
+                    updatePairs: 'PUT /api/config/pairs',
+                    addPair: 'POST /api/config/pairs/add',
+                    removePair: 'DELETE /api/config/pairs/:pair',
+                    reset: 'POST /api/config/reset'
                 },
                 indicators: [
                     'RSI', 'MACD', 'Bollinger Bands', 'Moving Average', 'Volume Analysis',
@@ -74,12 +103,228 @@ class TradingBotServer {
             });
         });
         
-        // API route for dashboard data
-        this.app.get('/api/data', (req, res) => {
+        // Configuration management endpoints
+        this.app.get('/api/config', async (req, res) => {
             try {
+                const configInfo = await this.configManager.getConfigInfo();
+                res.json({
+                    config: configInfo,
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                Logger.error('Error getting configuration', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to get configuration',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        this.app.put('/api/config/pairs', async (req, res) => {
+            try {
+                const { pairs, updatedBy = 'dashboard' } = req.body;
+                
+                if (!pairs || !Array.isArray(pairs)) {
+                    return res.status(400).json({
+                        error: 'Invalid request',
+                        message: 'pairs must be an array',
+                        timestamp: Date.now()
+                    });
+                }
+                
+                // Update configuration
+                const updateResult = await this.configManager.updatePairs(pairs, updatedBy);
+                
+                // Update data collector
+                await this.dataCollector.updatePairs(pairs);
+                
+                // Clear strategy results for removed pairs
+                const { removed } = updateResult.changes;
+                removed.forEach(pair => {
+                    delete this.strategyResults[pair];
+                });
+                
+                // Update strategies for new pairs
+                const { added } = updateResult.changes;
+                setTimeout(() => {
+                    added.forEach(pair => {
+                        this.updateStrategiesForPair(pair);
+                    });
+                }, 5000); // Give time for data collection to start
+                
+                Logger.info('Trading pairs updated via API', updateResult);
+                
+                res.json({
+                    success: true,
+                    message: 'Trading pairs updated successfully',
+                    ...updateResult,
+                    timestamp: Date.now()
+                });
+                
+            } catch (error) {
+                Logger.error('Error updating trading pairs', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to update trading pairs',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        this.app.post('/api/config/pairs/add', async (req, res) => {
+            try {
+                const { pair, updatedBy = 'dashboard' } = req.body;
+                
+                if (!pair || typeof pair !== 'string') {
+                    return res.status(400).json({
+                        error: 'Invalid request',
+                        message: 'pair must be a string',
+                        timestamp: Date.now()
+                    });
+                }
+                
+                const normalizedPair = pair.toUpperCase();
+                
+                // Get current pairs and add new one
+                const currentPairs = await this.configManager.getCurrentPairs();
+                
+                if (currentPairs.includes(normalizedPair)) {
+                    return res.status(400).json({
+                        error: 'Pair already exists',
+                        pair: normalizedPair,
+                        timestamp: Date.now()
+                    });
+                }
+                
+                const newPairs = [...currentPairs, normalizedPair];
+                
+                // Update configuration
+                const updateResult = await this.configManager.updatePairs(newPairs, updatedBy);
+                
+                // Add to data collector
+                await this.dataCollector.addPair(normalizedPair);
+                
+                // Update strategies for new pair after some time
+                setTimeout(() => {
+                    this.updateStrategiesForPair(normalizedPair);
+                }, 5000);
+                
+                Logger.info('Trading pair added via API', { pair: normalizedPair });
+                
+                res.json({
+                    success: true,
+                    message: `Trading pair ${normalizedPair} added successfully`,
+                    pair: normalizedPair,
+                    totalPairs: newPairs.length,
+                    timestamp: Date.now()
+                });
+                
+            } catch (error) {
+                Logger.error('Error adding trading pair', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to add trading pair',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        this.app.delete('/api/config/pairs/:pair', async (req, res) => {
+            try {
+                const pair = req.params.pair.toUpperCase();
+                const { updatedBy = 'dashboard' } = req.body;
+                
+                // Get current pairs and remove the specified one
+                const currentPairs = await this.configManager.getCurrentPairs();
+                
+                if (!currentPairs.includes(pair)) {
+                    return res.status(404).json({
+                        error: 'Pair not found',
+                        pair: pair,
+                        availablePairs: currentPairs,
+                        timestamp: Date.now()
+                    });
+                }
+                
+                const newPairs = currentPairs.filter(p => p !== pair);
+                
+                // Update configuration
+                const updateResult = await this.configManager.updatePairs(newPairs, updatedBy);
+                
+                // Remove from data collector
+                await this.dataCollector.removePair(pair);
+                
+                // Clear strategy results
+                delete this.strategyResults[pair];
+                
+                Logger.info('Trading pair removed via API', { pair });
+                
+                res.json({
+                    success: true,
+                    message: `Trading pair ${pair} removed successfully`,
+                    pair: pair,
+                    totalPairs: newPairs.length,
+                    timestamp: Date.now()
+                });
+                
+            } catch (error) {
+                Logger.error('Error removing trading pair', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to remove trading pair',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        this.app.post('/api/config/reset', async (req, res) => {
+            try {
+                const { updatedBy = 'dashboard' } = req.body;
+                
+                // Reset to default pairs
+                const resetResult = await this.configManager.resetToDefault();
+                
+                // Update data collector
+                await this.dataCollector.updatePairs(resetResult.pairs);
+                
+                // Clear all strategy results and recalculate
+                this.strategyResults = {};
+                
+                setTimeout(() => {
+                    resetResult.pairs.forEach(pair => {
+                        this.updateStrategiesForPair(pair);
+                    });
+                }, 5000);
+                
+                Logger.info('Trading pairs reset to default via API');
+                
+                res.json({
+                    success: true,
+                    message: 'Trading pairs reset to default successfully',
+                    pairs: resetResult.pairs,
+                    totalPairs: resetResult.pairs.length,
+                    timestamp: Date.now()
+                });
+                
+            } catch (error) {
+                Logger.error('Error resetting trading pairs', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to reset trading pairs',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+        
+        // API route for dashboard data
+        this.app.get('/api/data', async (req, res) => {
+            try {
+                const currentPairs = await this.configManager.getCurrentPairs();
+                
                 const data = {
                     uptime: this.getUptime(),
-                    pairs: config.get('trading.pairs'),
+                    pairs: currentPairs,  // Use dynamic pairs
                     history: this.dataCollector.getAllHistory(),
                     strategyResults: this.strategyResults,
                     stats: this.getSystemStats(),
@@ -100,11 +345,13 @@ class TradingBotServer {
         });
         
         // API route for available pairs list
-        this.app.get('/api/pairs', (req, res) => {
+        this.app.get('/api/pairs', async (req, res) => {
             try {
+                const currentPairs = await this.configManager.getCurrentPairs();
+                
                 res.json({
-                    pairs: config.get('trading.pairs'),
-                    total: config.get('trading.pairs').length,
+                    pairs: currentPairs,  // Use dynamic pairs
+                    total: currentPairs.length,
                     timestamp: Date.now()
                 });
             } catch (error) {
@@ -117,9 +364,10 @@ class TradingBotServer {
         });
         
         // API route for individual pair data
-        this.app.get('/api/pair/:pair', (req, res) => {
+        this.app.get('/api/pair/:pair', async (req, res) => {
             try {
                 const pair = req.params.pair.toUpperCase();
+                const currentPairs = await this.configManager.getCurrentPairs();
                 const history = this.dataCollector.getHistoryForPair(pair);
                 const strategies = this.strategyResults[pair];
                 
@@ -127,7 +375,7 @@ class TradingBotServer {
                     return res.status(404).json({ 
                         error: 'Pair not found',
                         pair: pair,
-                        availablePairs: config.get('trading.pairs'),
+                        availablePairs: currentPairs,  // Use dynamic pairs
                         timestamp: Date.now()
                     });
                 }
@@ -188,7 +436,7 @@ class TradingBotServer {
         });
         
         // API route for specific indicator data
-        this.app.get('/api/pair/:pair/indicator/:indicator', (req, res) => {
+        this.app.get('/api/pair/:pair/indicator/:indicator', async (req, res) => {
             try {
                 const pair = req.params.pair.toUpperCase();
                 const indicator = req.params.indicator.toLowerCase();
@@ -232,7 +480,12 @@ class TradingBotServer {
                     'GET /api/data',
                     'GET /api/pairs',
                     'GET /api/pair/:pair',
-                    'GET /api/pair/:pair/indicator/:indicator'
+                    'GET /api/pair/:pair/indicator/:indicator',
+                    'GET /api/config',
+                    'PUT /api/config/pairs',
+                    'POST /api/config/pairs/add',
+                    'DELETE /api/config/pairs/:pair',
+                    'POST /api/config/reset'
                 ],
                 timestamp: Date.now()
             });
@@ -240,6 +493,12 @@ class TradingBotServer {
     }
     
     setupEventHandlers() {
+        // Only set up event handlers if dataCollector exists
+        if (!this.dataCollector) {
+            Logger.warn('DataCollector not initialized, skipping event handler setup');
+            return;
+        }
+        
         // Update strategies when new data arrives
         this.dataCollector.on('newData', ({ pair }) => {
             this.updateStrategiesForPair(pair);
@@ -255,10 +514,27 @@ class TradingBotServer {
             this.lastUpdate = new Date().toISOString();
         });
         
-        // Handle API client events
-        this.apiClient.on('requestError', ({ endpoint, error }) => {
-            Logger.warn('API request failed', { endpoint, error: error.message });
+        // Handle pair management events
+        this.dataCollector.on('pairAdded', ({ pair }) => {
+            Logger.info(`Pair ${pair} added to data collection`);
         });
+        
+        this.dataCollector.on('pairRemoved', ({ pair }) => {
+            Logger.info(`Pair ${pair} removed from data collection`);
+        });
+        
+        this.dataCollector.on('pairsUpdated', ({ oldPairs, newPairs, changes }) => {
+            Logger.info('Data collection pairs updated', { oldPairs, newPairs, changes });
+        });
+        
+        // Handle API client events
+        if (this.apiClient) {
+            this.apiClient.on('requestError', ({ endpoint, error }) => {
+                Logger.warn('API request failed', { endpoint, error: error.message });
+            });
+        }
+        
+        Logger.debug('Event handlers setup completed');
     }
     
     updateStrategiesForPair(pair) {
@@ -297,7 +573,7 @@ class TradingBotServer {
             dataCollection: dataStats,
             strategies: strategyStats,
             memory: process.memoryUsage(),
-            pairs: config.get('trading.pairs').length,
+            pairs: this.dataCollector.config.pairs.length,
             indicators: Object.keys(this.technicalStrategies.indicators).length
         };
     }
@@ -306,12 +582,15 @@ class TradingBotServer {
         try {
             Logger.info('Starting Trading Bot Core API Server...');
             
+            // Initialize services (now async)
+            await this.initializeServices();
+            
             // Initialize data collection
             await this.dataCollector.initialize();
             
             // Start updating strategies for existing data
-            const pairs = config.get('trading.pairs');
-            pairs.forEach(pair => {
+            const currentPairs = await this.configManager.getCurrentPairs();
+            currentPairs.forEach(pair => {
                 this.updateStrategiesForPair(pair);
             });
             
@@ -322,11 +601,20 @@ class TradingBotServer {
                 console.log(`📊 Health check: http://localhost:${this.port}/api/health`);
                 console.log(`📡 Market data: http://localhost:${this.port}/api/data`);
                 console.log(`📋 Available pairs: http://localhost:${this.port}/api/pairs`);
+                console.log(`⚙️  Configuration: http://localhost:${this.port}/api/config`);
                 console.log(`🔍 Individual pair: http://localhost:${this.port}/api/pair/RVN`);
             });
             
         } catch (error) {
-            Logger.error('Failed to start server', { error: error.message });
+            const errorMessage = error && error.message ? error.message : 'Unknown error occurred';
+            Logger.error('Failed to start server', { 
+                error: errorMessage,
+                stack: error && error.stack ? error.stack : 'No stack trace available'
+            });
+            console.error('Fatal error:', errorMessage);
+            if (error && error.stack) {
+                console.error('Stack trace:', error.stack);
+            }
             process.exit(1);
         }
     }

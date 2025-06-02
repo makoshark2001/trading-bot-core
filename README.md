@@ -1,8 +1,8 @@
 # Trading Bot Core API
 
-**Market Data Collection & Technical Analysis Engine**
+**Market Data Collection & Technical Analysis Engine with Dynamic Pair Management**
 
-Core infrastructure providing real-time cryptocurrency market data collection, technical analysis, and RESTful API services for the trading bot ecosystem.
+Core infrastructure providing real-time cryptocurrency market data collection, technical analysis, and RESTful API services for the trading bot ecosystem. Now with **dynamic trading pair management** - add, remove, and modify trading pairs without restarting the server.
 
 ## 🎯 Purpose
 
@@ -11,11 +11,12 @@ This is the **data and analysis engine** that powers the trading bot ecosystem. 
 - 11 advanced technical indicators with ensemble analysis
 - RESTful API for market data and technical analysis
 - Signal generation and confidence scoring
+- **NEW**: Dynamic trading pair management with dashboard-ready API endpoints
 
 ## 🏗️ Architecture Role
 
 This repository is **one component** of a larger trading bot ecosystem:
-- **Core** (this repo): Market data collection and technical analysis
+- **Core** (this repo): Market data collection, technical analysis, and dynamic pair management
 - **Dashboard**: Web interface and real-time visualization  
 - **ML**: Machine learning predictions and AI-enhanced signals
 - **Backtest**: Strategy testing and historical validation
@@ -23,6 +24,14 @@ This repository is **one component** of a larger trading bot ecosystem:
 - **Execution**: Trade execution and order management
 
 ## 🚀 Features
+
+### Dynamic Trading Pair Management
+- **Runtime Configuration**: Add/remove pairs without server restart
+- **Persistent Storage**: Configuration survives server restarts
+- **Real-time Updates**: Data collection starts immediately for new pairs
+- **Dashboard Integration**: Complete API for pair management
+- **Validation**: Input validation and error handling
+- **Fallback**: Automatic fallback to default pairs if needed
 
 ### Technical Indicators (11 Total)
 1. **RSI** (Relative Strength Index) - Momentum oscillator
@@ -59,10 +68,17 @@ Service information and API documentation
 {
   "service": "Trading Bot Core API",
   "version": "2.0.0",
+  "description": "Market data collection and technical analysis engine with dynamic pair management",
   "endpoints": {
     "health": "/api/health",
     "data": "/api/data", 
-    "pair": "/api/pair/:pair"
+    "pairs": "/api/pairs",
+    "pair": "/api/pair/:pair",
+    "config": "/api/config",
+    "updatePairs": "PUT /api/config/pairs",
+    "addPair": "POST /api/config/pairs/add",
+    "removePair": "DELETE /api/config/pairs/:pair",
+    "reset": "POST /api/config/reset"
   },
   "indicators": ["RSI", "MACD", "Bollinger Bands", ...]
 }
@@ -79,7 +95,7 @@ System health and status information
   "dataCollection": {
     "isCollecting": true,
     "totalDataPoints": 1250,
-    "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"]
+    "pairs": ["BTC", "ETH", "XMR", "RVN"]
   },
   "indicators": {
     "available": ["rsi", "macd", "bollinger", ...],
@@ -88,13 +104,111 @@ System health and status information
 }
 ```
 
+### Dynamic Pair Management Endpoints
+
+#### `GET /api/config`
+Get current trading pair configuration
+```json
+{
+  "config": {
+    "pairs": ["BTC", "ETH", "XMR", "RVN"],
+    "lastUpdated": 1674123456789,
+    "updatedBy": "dashboard",
+    "totalPairs": 4
+  },
+  "timestamp": 1674123456789
+}
+```
+
+#### `PUT /api/config/pairs`
+Update all trading pairs
+```bash
+curl -X PUT http://localhost:3000/api/config/pairs \
+  -H "Content-Type: application/json" \
+  -d '{"pairs": ["BTC", "ETH", "XMR"], "updatedBy": "dashboard"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Trading pairs updated successfully",
+  "oldPairs": ["BTC", "ETH", "XMR", "RVN"],
+  "newPairs": ["BTC", "ETH", "XMR"],
+  "changes": {
+    "added": [],
+    "removed": ["RVN"]
+  },
+  "timestamp": 1674123456789
+}
+```
+
+#### `POST /api/config/pairs/add`
+Add a single trading pair
+```bash
+curl -X POST http://localhost:3000/api/config/pairs/add \
+  -H "Content-Type: application/json" \
+  -d '{"pair": "DOGE", "updatedBy": "dashboard"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Trading pair DOGE added successfully",
+  "pair": "DOGE",
+  "totalPairs": 4,
+  "timestamp": 1674123456789
+}
+```
+
+#### `DELETE /api/config/pairs/:pair`
+Remove a single trading pair
+```bash
+curl -X DELETE http://localhost:3000/api/config/pairs/DOGE \
+  -H "Content-Type: application/json" \
+  -d '{"updatedBy": "dashboard"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Trading pair DOGE removed successfully",
+  "pair": "DOGE",
+  "totalPairs": 3,
+  "timestamp": 1674123456789
+}
+```
+
+#### `POST /api/config/reset`
+Reset to default trading pairs
+```bash
+curl -X POST http://localhost:3000/api/config/reset \
+  -H "Content-Type: application/json" \
+  -d '{"updatedBy": "dashboard"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Trading pairs reset to default successfully",
+  "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
+  "totalPairs": 6,
+  "timestamp": 1674123456789
+}
+```
+
+### Market Data Endpoints
+
 #### `GET /api/data`
 All pairs with complete market data and technical analysis
 ```json
 {
-  "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
+  "pairs": ["BTC", "ETH", "XMR", "RVN"],
   "strategyResults": {
-    "RVN": {
+    "BTC": {
       "rsi": {
         "value": 45.2,
         "suggestion": "hold",
@@ -115,10 +229,10 @@ All pairs with complete market data and technical analysis
     }
   },
   "history": {
-    "RVN": {
-      "closes": [0.02434, 0.02441, ...],
-      "highs": [0.02445, 0.02450, ...],
-      "lows": [0.02430, 0.02435, ...],
+    "BTC": {
+      "closes": [45234.5, 45441.2, ...],
+      "highs": [45445.0, 45550.0, ...],
+      "lows": [45130.0, 45235.0, ...],
       "volumes": [15420, 16830, ...],
       "timestamps": [1672531200000, ...]
     }
@@ -129,15 +243,25 @@ All pairs with complete market data and technical analysis
 }
 ```
 
+#### `GET /api/pairs`
+List of current trading pairs
+```json
+{
+  "pairs": ["BTC", "ETH", "XMR", "RVN"],
+  "total": 4,
+  "timestamp": 1674123456789
+}
+```
+
 #### `GET /api/pair/:pair`
 Individual pair analysis and history
 ```json
 {
-  "pair": "RVN",
+  "pair": "BTC",
   "history": {
-    "closes": [0.02434, 0.02441, ...],
-    "highs": [0.02445, 0.02450, ...],
-    "lows": [0.02430, 0.02435, ...],
+    "closes": [45234.5, 45441.2, ...],
+    "highs": [45445.0, 45550.0, ...],
+    "lows": [45130.0, 45235.0, ...],
     "volumes": [15420, 16830, ...],
     "timestamps": [1672531200000, ...]
   },
@@ -154,7 +278,7 @@ Individual pair analysis and history
 Specific indicator data for a pair
 ```json
 {
-  "pair": "RVN",
+  "pair": "BTC",
   "indicator": "rsi",
   "data": {
     "value": 45.2,
@@ -221,6 +345,7 @@ npm run test:all
 npm run test:api          # Test API client
 npm run test:data         # Test data collection
 npm run test:strategies   # Test technical indicators
+npm run test:pairs        # Test dynamic pairs management
 ```
 
 ### Manual API Testing
@@ -228,26 +353,47 @@ npm run test:strategies   # Test technical indicators
 # Health check
 curl http://localhost:3000/api/health
 
+# Get current configuration
+curl http://localhost:3000/api/config
+
+# Add a trading pair
+curl -X POST http://localhost:3000/api/config/pairs/add \
+  -H "Content-Type: application/json" \
+  -d '{"pair": "BTC"}'
+
 # Get all market data
 curl http://localhost:3000/api/data
 
 # Get specific pair
-curl http://localhost:3000/api/pair/RVN
+curl http://localhost:3000/api/pair/BTC
 
 # Get specific indicator
-curl http://localhost:3000/api/pair/RVN/indicator/rsi
+curl http://localhost:3000/api/pair/BTC/indicator/rsi
 ```
 
 ## 🔧 Configuration
 
-### Trading Pairs
-Edit `config/default.json`:
+### Default Trading Pairs
+The system starts with default pairs defined in `config/default.json`, but runtime pairs are managed dynamically in `config/runtime.json`.
+
+**Default Configuration** (`config/default.json`):
 ```json
 {
   "trading": {
     "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
-    "updateInterval": 300000,
-    "dataRetention": 1440
+    "dataRetention": 1440,
+    "updateInterval": 300000
+  }
+}
+```
+
+**Runtime Configuration** (`config/runtime.json` - auto-created):
+```json
+{
+  "trading": {
+    "pairs": ["BTC", "ETH", "XMR", "RVN"],
+    "lastUpdated": 1674123456789,
+    "updatedBy": "dashboard"
   }
 }
 ```
@@ -255,100 +401,194 @@ Edit `config/default.json`:
 ### Technical Indicators
 All indicators are configurable with custom periods and parameters. See individual indicator files in `src/strategies/technical/indicators/`.
 
-## 🔗 Integration Examples
+## 🔗 Dashboard Integration Examples
 
-### Consuming the API from Other Services
-
-#### JavaScript/Node.js
+### JavaScript/Node.js
 ```javascript
 const CORE_API_URL = 'http://localhost:3000';
 
-// Get market data
-async function getMarketData() {
-  const response = await fetch(`${CORE_API_URL}/api/data`);
-  return response.json();
+class TradingPairsManager {
+    async getCurrentPairs() {
+        const response = await fetch(`${CORE_API_URL}/api/config`);
+        const data = await response.json();
+        return data.config.pairs;
+    }
+    
+    async addPair(pair) {
+        const response = await fetch(`${CORE_API_URL}/api/config/pairs/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pair: pair,
+                updatedBy: 'dashboard'
+            })
+        });
+        return response.json();
+    }
+    
+    async updatePairs(newPairs) {
+        const response = await fetch(`${CORE_API_URL}/api/config/pairs`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pairs: newPairs,
+                updatedBy: 'dashboard'
+            })
+        });
+        return response.json();
+    }
+    
+    async removePair(pair) {
+        const response = await fetch(`${CORE_API_URL}/api/config/pairs/${pair}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updatedBy: 'dashboard' })
+        });
+        return response.json();
+    }
+    
+    async resetToDefault() {
+        const response = await fetch(`${CORE_API_URL}/api/config/reset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updatedBy: 'dashboard' })
+        });
+        return response.json();
+    }
 }
 
-// Get specific pair analysis
-async function getPairAnalysis(pair) {
-  const response = await fetch(`${CORE_API_URL}/api/pair/${pair}`);
-  return response.json();
-}
+// Usage example
+const pairsManager = new TradingPairsManager();
 
-// Get RSI for RVN
-async function getRSI(pair) {
-  const response = await fetch(`${CORE_API_URL}/api/pair/${pair}/indicator/rsi`);
-  return response.json();
-}
+// Add a new pair
+await pairsManager.addPair('BTC');
+
+// Update all pairs
+await pairsManager.updatePairs(['BTC', 'ETH', 'XMR']);
+
+// Remove a pair
+await pairsManager.removePair('ETH');
+
+// Reset to defaults
+await pairsManager.resetToDefault();
 ```
 
-#### Python
+### Python
 ```python
 import requests
 
-CORE_API_URL = 'http://localhost:3000'
-
-def get_market_data():
-    response = requests.get(f'{CORE_API_URL}/api/data')
-    return response.json()
-
-def get_pair_analysis(pair):
-    response = requests.get(f'{CORE_API_URL}/api/pair/{pair}')
-    return response.json()
-```
-
-#### Dashboard Service Example
-```javascript
-// How a dashboard service would consume this API
-class TradingDashboard {
-  constructor() {
-    this.coreAPI = 'http://localhost:3000';
-  }
-  
-  async updateCharts() {
-    const data = await fetch(`${this.coreAPI}/api/data`);
-    const marketData = await data.json();
+class TradingPairsManager:
+    def __init__(self, core_api_url='http://localhost:3000'):
+        self.core_api_url = core_api_url
     
-    // Update charts with technical analysis
-    this.updateCharts(marketData.strategyResults);
-    this.updatePriceData(marketData.history);
-  }
-}
+    def get_current_pairs(self):
+        response = requests.get(f'{self.core_api_url}/api/config')
+        return response.json()['config']['pairs']
+    
+    def add_pair(self, pair, updated_by='dashboard'):
+        response = requests.post(
+            f'{self.core_api_url}/api/config/pairs/add',
+            json={'pair': pair, 'updatedBy': updated_by}
+        )
+        return response.json()
+    
+    def update_pairs(self, new_pairs, updated_by='dashboard'):
+        response = requests.put(
+            f'{self.core_api_url}/api/config/pairs',
+            json={'pairs': new_pairs, 'updatedBy': updated_by}
+        )
+        return response.json()
+    
+    def remove_pair(self, pair, updated_by='dashboard'):
+        response = requests.delete(
+            f'{self.core_api_url}/api/config/pairs/{pair}',
+            json={'updatedBy': updated_by}
+        )
+        return response.json()
+
+# Usage example
+pairs_manager = TradingPairsManager()
+
+# Get current pairs
+current_pairs = pairs_manager.get_current_pairs()
+print(f"Current pairs: {current_pairs}")
+
+# Add a new pair
+result = pairs_manager.add_pair('BTC')
+print(f"Added BTC: {result['success']}")
 ```
 
 ## 🏗️ Architecture & Design
 
-### Event-Driven Data Processing
+### Event-Driven Data Processing with Dynamic Pairs
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Xeggex API    │───▶│ MarketDataCollector │───▶│ TechnicalStrategies │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                 │                        │
-                                ▼                        ▼
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │   Data Storage  │    │ Signal Generation│
+                       ┌─────────────────┐              ▼
+                       │  ConfigManager  │    ┌─────────────────┐
+                       │  (Runtime Pairs)│    │ Signal Generation│
                        └─────────────────┘    └─────────────────┘
                                 │                        │
                                 └────────┬───────────────┘
                                          ▼
                                 ┌─────────────────┐
                                 │   REST API      │
+                                │ (Dynamic Pairs) │
                                 └─────────────────┘
 ```
 
-### Data Flow
-1. **Market Data Collection**: Real-time data from Xeggex API
-2. **Data Validation**: Quality checks and error handling
-3. **Technical Analysis**: Calculate all 11 indicators
-4. **Signal Generation**: Ensemble analysis and confidence scoring
-5. **API Serving**: RESTful endpoints for other services
+### Dynamic Pair Management Flow
+1. **Dashboard Request**: API call to add/remove/update pairs
+2. **Configuration Update**: ConfigManager validates and saves to `runtime.json`
+3. **Data Collector Update**: MarketDataCollector adds/removes pairs dynamically
+4. **Data Collection**: New pairs start collecting data immediately
+5. **Strategy Calculation**: Technical indicators calculated for new pairs
+6. **API Response**: Real-time data available via API endpoints
 
-### Microservice Architecture
-This core service is designed to be consumed by other specialized services:
-- **Stateless**: No session management, pure API
-- **Scalable**: Can handle multiple concurrent requests
-- **Focused**: Single responsibility (data + analysis)
-- **Independent**: Runs standalone without dependencies on other services
+### File Structure
+```
+config/
+├── default.json          # Static default configuration
+└── runtime.json          # Dynamic runtime configuration (auto-created)
+
+src/
+├── utils/
+│   ├── ConfigManager.js   # Dynamic pair configuration management
+│   ├── Logger.js          # Winston logging
+│   └── index.js
+├── data/collectors/
+│   ├── XeggexClient.js          # API client for Xeggex
+│   ├── MarketDataCollector.js   # Real-time data collection with dynamic pairs
+│   └── index.js
+├── strategies/
+│   └── technical/
+│       ├── TechnicalStrategies.js   # Main strategy engine
+│       ├── indicators/              # Individual indicator implementations
+│       │   ├── RSI.js
+│       │   ├── MACD.js
+│       │   ├── BollingerBands.js
+│       │   ├── MovingAverage.js
+│       │   ├── Volume.js
+│       │   ├── Stochastic.js
+│       │   ├── WilliamsR.js
+│       │   ├── IchimokuCloud.js
+│       │   ├── ADX.js
+│       │   ├── CCI.js
+│       │   ├── ParabolicSAR.js
+│       │   └── index.js
+│       └── index.js
+├── server/
+│   └── ExpressApp.js                # Express API server with dynamic pair endpoints
+└── main.js                          # Application entry point
+
+scripts/
+├── test-dynamic-pairs.js            # Test dynamic pair management
+├── test-api-client.js               # Test API client
+├── test-data-collector.js           # Test data collection
+└── test-technical-strategies.js     # Test technical analysis
+```
 
 ## 📊 Data Structures
 
@@ -370,50 +610,21 @@ This core service is designed to be consumed by other specialized services:
 ### Market Data Format
 ```javascript
 {
-  "closes": [0.02434, 0.02441, ...],     // Closing prices
-  "highs": [0.02445, 0.02450, ...],      // High prices
-  "lows": [0.02430, 0.02435, ...],       // Low prices  
+  "closes": [45234.5, 45441.2, ...],     // Closing prices
+  "highs": [45445.0, 45550.0, ...],      // High prices
+  "lows": [45130.0, 45235.0, ...],       // Low prices  
   "volumes": [15420, 16830, ...],        // Trading volumes
   "timestamps": [1672531200000, ...]     // Unix timestamps
 }
 ```
 
-## 🔧 Advanced Configuration
-
-### Custom Indicator Periods
+### Configuration Format
 ```javascript
-// Modify indicator periods in TechnicalStrategies.js
-constructor() {
-  this.indicators = {
-    rsi: new RSI(21),           // Custom 21-period RSI
-    macd: new MACD(8, 21, 5),   // Custom MACD parameters
-    bollinger: new BollingerBands(15, 2.5), // Custom Bollinger settings
-    // ... other indicators
-  };
-}
-```
-
-### Rate Limiting Configuration
-```json
 {
-  "api": {
-    "xeggex": {
-      "rateLimit": {
-        "requests": 100,
-        "window": 60000
-      }
-    }
-  }
-}
-```
-
-### Data Retention Settings
-```json
-{
-  "trading": {
-    "dataRetention": 1440,     // Keep 1440 data points (5 days at 5min intervals)
-    "updateInterval": 300000   // Update every 5 minutes
-  }
+  "pairs": ["BTC", "ETH", "XMR", "RVN"],
+  "lastUpdated": 1674123456789,
+  "updatedBy": "dashboard",
+  "totalPairs": 4
 }
 ```
 
@@ -425,7 +636,14 @@ constructor() {
 {
   "error": "Pair not found",
   "pair": "INVALID",
-  "availablePairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
+  "availablePairs": ["BTC", "ETH", "XMR", "RVN"],
+  "timestamp": 1672531200000
+}
+
+// 400 - Invalid request
+{
+  "error": "Invalid request",
+  "message": "pairs must be an array",
   "timestamp": 1672531200000
 }
 
@@ -435,25 +653,13 @@ constructor() {
   "message": "Calculation failed",
   "timestamp": 1672531200000
 }
-
-// 404 - Endpoint not found
-{
-  "error": "Endpoint not found",
-  "service": "Trading Bot Core API",
-  "availableEndpoints": ["GET /", "GET /api/health", ...],
-  "timestamp": 1672531200000
-}
 ```
 
-### Health Check Failure
-```javascript
-{
-  "status": "unhealthy",
-  "service": "Trading Bot Core",
-  "error": "API connection failed",
-  "timestamp": 1672531200000
-}
-```
+### Dynamic Pair Validation
+- **Pair Format**: Must be 2-10 characters, alphanumeric only (e.g., "BTC", "ETH")
+- **Array Validation**: Pairs must be provided as non-empty array
+- **Duplicate Prevention**: Cannot add pairs that already exist
+- **Existence Check**: Cannot remove pairs that don't exist
 
 ## 📈 Performance
 
@@ -463,12 +669,14 @@ constructor() {
 - **Configurable data retention** to manage memory usage
 - **Rate limiting** to respect API boundaries
 - **Connection pooling** for database operations
+- **Dynamic pair management** without server restarts
 
 ### Monitoring
 - Real-time health checks via `/api/health`
 - Memory usage tracking in system stats
 - API request success/failure rates
 - Data collection statistics and error rates
+- Configuration change tracking
 
 ## 🔒 Security
 
@@ -482,70 +690,30 @@ constructor() {
 - API credentials stored in environment variables
 - No sensitive data in logs or responses
 - Secure error handling without data leakage
+- Configuration file permissions
 
-## 📚 Technical Documentation
+## ⚠️ Important Notes
 
-### Project Structure
-```
-src/
-├── data/
-│   ├── collectors/
-│   │   ├── XeggexClient.js          # API client for Xeggex
-│   │   ├── MarketDataCollector.js   # Real-time data collection
-│   │   └── index.js
-│   └── validators/
-│       ├── DataValidator.js         # Data validation utilities
-│       └── index.js
-├── strategies/
-│   └── technical/
-│       ├── TechnicalStrategies.js   # Main strategy engine
-│       ├── indicators/              # Individual indicator implementations
-│       │   ├── RSI.js
-│       │   ├── MACD.js
-│       │   ├── BollingerBands.js
-│       │   ├── MovingAverage.js
-│       │   ├── Volume.js
-│       │   ├── Stochastic.js
-│       │   ├── WilliamsR.js
-│       │   ├── IchimokuCloud.js
-│       │   ├── ADX.js
-│       │   ├── CCI.js
-│       │   ├── ParabolicSAR.js
-│       │   └── index.js
-│       └── index.js
-├── utils/
-│   ├── Logger.js                    # Winston-based logging
-│   └── index.js
-├── server/
-│   └── ExpressApp.js                # Express API server
-└── main.js                          # Application entry point
-```
+### Dynamic Pairs Behavior
+1. **Data Collection**: New pairs start collecting data immediately but need ~5 minutes for technical analysis
+2. **Historical Data**: Removed pairs lose their data, added pairs start fresh
+3. **Configuration Persistence**: Changes are saved to `config/runtime.json` and survive restarts
+4. **Fallback Mechanism**: If `runtime.json` is corrupted, system falls back to default pairs
+5. **Validation**: Invalid pair formats are rejected with detailed error messages
 
-### Key Classes
-
-#### `TechnicalStrategies`
-Main engine for calculating all technical indicators and generating ensemble signals.
-
-#### `MarketDataCollector`
-Handles real-time data collection, storage, and event emission for new data.
-
-#### `XeggexClient`
-API client with rate limiting, error handling, and health checks.
-
-#### Individual Indicators
-Each indicator is implemented as a separate class with consistent interface:
-- `calculate(data)` - Main calculation method
-- `generateSignal()` - Trading signal generation
-- Validation and error handling
+### Performance Considerations
+- **Memory Usage**: Each pair stores up to 1440 data points (5 days at 5-minute intervals)
+- **API Rate Limits**: Respects Xeggex rate limits (100 requests/minute)
+- **Real-time Updates**: Changes take effect immediately but full data collection may take minutes
+- **Concurrent Operations**: Multiple pair operations can be performed simultaneously
 
 ## 🤝 Contributing
 
-### Adding New Indicators
-1. Create new indicator class in `src/strategies/technical/indicators/`
-2. Follow the existing indicator interface pattern
-3. Add to `TechnicalStrategies.js` indicators list
-4. Create comprehensive tests
-5. Update documentation
+### Adding New Features
+1. Follow existing code patterns and structure
+2. Add comprehensive tests for new functionality
+3. Update documentation and API examples
+4. Ensure backward compatibility
 
 ### Code Standards
 - ESLint configuration for consistent formatting
@@ -559,7 +727,7 @@ ISC License - See LICENSE file for details.
 
 ## 🔗 Related Repositories
 
-- **[trading-bot-dashboard](https://github.com/makoshark2001/trading-bot-dashboard)** - Web interface and visualization
+- **[trading-bot-dashboard](https://github.com/makoshark2001/trading-bot-dashboard)** - Web interface with dynamic pair management
 - **[trading-bot-ml](https://github.com/makoshark2001/trading-bot-ml)** - Machine learning predictions  
 - **[trading-bot-backtest](https://github.com/makoshark2001/trading-bot-backtest)** - Strategy testing and validation
 - **[trading-bot-risk](https://github.com/makoshark2001/trading-bot-risk)** - Risk management and position sizing
@@ -574,5 +742,5 @@ For issues, questions, or contributions:
 
 ---
 
-**Trading Bot Core API** - Market Data Collection & Technical Analysis Engine  
+**Trading Bot Core API** - Market Data Collection & Technical Analysis Engine with Dynamic Pair Management  
 *Part of the Trading Bot Ecosystem*

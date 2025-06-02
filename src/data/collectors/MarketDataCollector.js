@@ -68,37 +68,7 @@ class MarketDataCollector extends EventEmitter {
         
         for (const pair of this.config.pairs) {
             try {
-                Logger.debug(`Preloading data for ${pair}...`);
-                
-                const response = await this.apiClient.getCandles(`${pair}_USDT`, 5, 180);
-                
-                this.initializeHistoryForPair(pair);
-                
-                if (response.bars && Array.isArray(response.bars)) {
-                    let validBars = 0;
-                    
-                    response.bars.forEach(bar => {
-                        const dataPoint = {
-                            timestamp: bar.time,
-                            close: parseFloat(bar.close),
-                            high: parseFloat(bar.high),
-                            low: parseFloat(bar.low),
-                            volume: parseFloat(bar.volume)
-                        };
-                        
-                        if (this.addDataPoint(pair, dataPoint, false)) {
-                            validBars++;
-                        }
-                    });
-                    
-                    Logger.info(`Preloaded ${validBars} data points for ${pair}`);
-                    this.emit('dataPreloaded', { 
-                        pair, 
-                        dataPoints: validBars,
-                        totalPoints: this.history[pair].closes.length 
-                    });
-                }
-                
+                await this.preloadSinglePair(pair);
             } catch (error) {
                 Logger.error(`Error preloading data for ${pair}`, { 
                     pair, 
@@ -111,6 +81,39 @@ class MarketDataCollector extends EventEmitter {
         Logger.info('Historical data preload completed', {
             totalDataPoints: this.stats.totalDataPoints
         });
+    }
+    
+    async preloadSinglePair(pair) {
+        Logger.debug(`Preloading data for ${pair}...`);
+        
+        this.initializeHistoryForPair(pair);
+        
+        const response = await this.apiClient.getCandles(`${pair}_USDT`, 5, 180);
+        
+        if (response.bars && Array.isArray(response.bars)) {
+            let validBars = 0;
+            
+            response.bars.forEach(bar => {
+                const dataPoint = {
+                    timestamp: bar.time,
+                    close: parseFloat(bar.close),
+                    high: parseFloat(bar.high),
+                    low: parseFloat(bar.low),
+                    volume: parseFloat(bar.volume)
+                };
+                
+                if (this.addDataPoint(pair, dataPoint, false)) {
+                    validBars++;
+                }
+            });
+            
+            Logger.info(`Preloaded ${validBars} data points for ${pair}`);
+            this.emit('dataPreloaded', { 
+                pair, 
+                dataPoints: validBars,
+                totalPoints: this.history[pair].closes.length 
+            });
+        }
     }
     
     initializeHistoryForPair(pair) {
@@ -258,6 +261,121 @@ class MarketDataCollector extends EventEmitter {
                 error: error.message
             });
             this.emit('fetchError', { pair, error });
+            throw error;
+        }
+    }
+    
+    // Dynamic pair management methods
+    async addPair(pair) {
+        if (this.config.pairs.includes(pair)) {
+            Logger.warn(`Pair ${pair} already exists in configuration`);
+            return false;
+        }
+        
+        try {
+            Logger.info(`Adding new trading pair: ${pair}`);
+            
+            // Add to config
+            this.config.pairs.push(pair);
+            
+            // Initialize history for new pair
+            this.initializeHistoryForPair(pair);
+            
+            // Preload historical data for new pair
+            await this.preloadSinglePair(pair);
+            
+            Logger.info(`Successfully added trading pair: ${pair}`);
+            this.emit('pairAdded', { pair });
+            
+            return true;
+        } catch (error) {
+            Logger.error(`Failed to add pair ${pair}`, { error: error.message });
+            // Remove from config if it was added
+            this.config.pairs = this.config.pairs.filter(p => p !== pair);
+            throw error;
+        }
+    }
+    
+    async removePair(pair) {
+        if (!this.config.pairs.includes(pair)) {
+            Logger.warn(`Pair ${pair} not found in configuration`);
+            return false;
+        }
+        
+        try {
+            Logger.info(`Removing trading pair: ${pair}`);
+            
+            // Remove from config
+            this.config.pairs = this.config.pairs.filter(p => p !== pair);
+            
+            // Remove history
+            delete this.history[pair];
+            
+            Logger.info(`Successfully removed trading pair: ${pair}`);
+            this.emit('pairRemoved', { pair });
+            
+            return true;
+        } catch (error) {
+            Logger.error(`Failed to remove pair ${pair}`, { error: error.message });
+            throw error;
+        }
+    }
+    
+    async updatePairs(newPairs) {
+        try {
+            Logger.info('Updating trading pairs configuration', {
+                oldPairs: this.config.pairs,
+                newPairs
+            });
+            
+            const oldPairs = [...this.config.pairs];
+            const added = newPairs.filter(p => !oldPairs.includes(p));
+            const removed = oldPairs.filter(p => !newPairs.includes(p));
+            
+            // Remove pairs that are no longer needed
+            for (const pair of removed) {
+                delete this.history[pair];
+                Logger.debug(`Removed history for ${pair}`);
+            }
+            
+            // Update config
+            this.config.pairs = [...newPairs];
+            
+            // Initialize history for new pairs
+            for (const pair of added) {
+                this.initializeHistoryForPair(pair);
+            }
+            
+            // Preload historical data for new pairs
+            for (const pair of added) {
+                try {
+                    await this.preloadSinglePair(pair);
+                } catch (error) {
+                    Logger.error(`Failed to preload data for new pair ${pair}`, {
+                        error: error.message
+                    });
+                }
+            }
+            
+            Logger.info('Successfully updated trading pairs', {
+                added,
+                removed,
+                totalPairs: newPairs.length
+            });
+            
+            this.emit('pairsUpdated', {
+                oldPairs,
+                newPairs,
+                changes: { added, removed }
+            });
+            
+            return {
+                success: true,
+                changes: { added, removed }
+            };
+            
+        } catch (error) {
+            Logger.error('Failed to update trading pairs', { error: error.message });
             throw error;
         }
     }
