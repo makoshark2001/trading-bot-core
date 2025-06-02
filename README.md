@@ -1,8 +1,8 @@
 # Trading Bot Core API
 
-**Market Data Collection & Technical Analysis Engine with Dynamic Pair Management & Enhanced Persistent Storage**
+**Market Data Collection & Technical Analysis Engine with Dynamic Pair Management, Persistent Storage & Pair Discovery**
 
-Core infrastructure providing real-time cryptocurrency market data collection, technical analysis, and RESTful API services for the trading bot ecosystem. Features **dynamic trading pair management** and **enhanced persistent local storage** with atomic writes and corruption prevention - add, remove, and modify trading pairs without restarting the server, with data preserved across restarts.
+Core infrastructure providing real-time cryptocurrency market data collection, technical analysis, and RESTful API services for the trading bot ecosystem. Features **dynamic trading pair management**, **persistent local storage**, and **automatic pair discovery** - add, remove, and discover trading pairs without restarting the server, with data preserved across restarts.
 
 ## 🎯 Purpose
 
@@ -12,12 +12,13 @@ This is the **data and analysis engine** that powers the trading bot ecosystem. 
 - RESTful API for market data and technical analysis
 - Signal generation and confidence scoring
 - **Dynamic trading pair management** with dashboard-ready API endpoints
-- **Enhanced persistent local storage** with atomic writes and corruption prevention
+- **Persistent local storage** for faster startups and data continuity
+- **Automatic pair discovery** from Xeggex exchange
 
 ## 🏗️ Architecture Role
 
 This repository is **one component** of a larger trading bot ecosystem:
-- **Core** (this repo): Market data collection, technical analysis, dynamic pair management, and persistent storage
+- **Core** (this repo): Market data collection, technical analysis, dynamic pair management, persistent storage, and pair discovery
 - **Dashboard**: Web interface and real-time visualization  
 - **ML**: Machine learning predictions and AI-enhanced signals
 - **Backtest**: Strategy testing and historical validation
@@ -26,14 +27,18 @@ This repository is **one component** of a larger trading bot ecosystem:
 
 ## 🚀 Features
 
-### Enhanced Persistent Local Storage
+### Automatic Pair Discovery
+- **Live Exchange Data**: Discovers all available USDT trading pairs from Xeggex in real-time
+- **Market Intelligence**: Shows price, volume, 24h change, and activity status for each pair
+- **Smart Filtering**: Filter by volume, price range, tracked status, and activity
+- **Validation**: Verify pair availability before adding to prevent errors
+- **Dashboard Ready**: Complete API for building pair browser interfaces
+
+### Persistent Local Storage
 - **Smart Data Loading**: Loads from local storage first, API fallback only when needed
-- **Atomic File Writing**: Uses temporary files and atomic renames to prevent corruption
-- **Fast Startup**: No waiting for API preloads after first run (6x faster)
+- **Fast Startup**: No waiting for API preloads after first run
 - **Data Continuity**: Historical data preserved across server restarts
 - **Automatic Saving**: Periodic saves every 5 minutes + graceful shutdown saves
-- **Sequential Shutdown**: Saves files one by one to prevent race conditions
-- **Corruption Prevention**: Data validation before writing and automatic cleanup of bad files
 - **Storage Management**: APIs to monitor storage stats and cleanup old files
 - **Performance Optimized**: Reduces API calls and improves reliability
 
@@ -80,13 +85,14 @@ Service information and API documentation
 {
   "service": "Trading Bot Core API",
   "version": "2.0.0",
-  "description": "Market data collection and technical analysis engine with dynamic pair management and enhanced persistent storage",
+  "description": "Market data collection and technical analysis engine with dynamic pair management, persistent storage, and pair discovery",
   "endpoints": {
     "health": "/api/health",
     "data": "/api/data", 
     "pairs": "/api/pairs",
     "pair": "/api/pair/:pair",
     "config": "/api/config",
+    "availablePairs": "/api/available-pairs",
     "updatePairs": "PUT /api/config/pairs",
     "addPair": "POST /api/config/pairs/add",
     "removePair": "DELETE /api/config/pairs/:pair",
@@ -99,15 +105,16 @@ Service information and API documentation
   "features": [
     "Real-time data collection",
     "Dynamic pair management", 
-    "Enhanced persistent local storage with atomic writes",
+    "Persistent local storage",
     "11 technical indicators",
-    "Ensemble signal generation"
+    "Ensemble signal generation",
+    "Automatic pair discovery"
   ]
 }
 ```
 
 #### `GET /api/health`
-System health and status information including storage health
+System health and status information
 ```json
 {
   "status": "healthy",
@@ -126,10 +133,59 @@ System health and status information including storage health
 }
 ```
 
-### Enhanced Storage Management Endpoints
+### Pair Discovery Endpoints
+
+#### `GET /api/available-pairs`
+Get all available USDT trading pairs from Xeggex exchange
+```json
+{
+  "availablePairs": [
+    {
+      "pair": "BTC",
+      "symbol": "BTC/USDT", 
+      "name": "Bitcoin",
+      "lastPrice": 43250.50,
+      "volume24h": 1250000,
+      "change24h": 2.5,
+      "isActive": true,
+      "isTracked": false,
+      "canAdd": true
+    },
+    {
+      "pair": "ETH",
+      "symbol": "ETH/USDT",
+      "name": "Ethereum", 
+      "lastPrice": 2580.25,
+      "volume24h": 980000,
+      "change24h": -1.2,
+      "isActive": true,
+      "isTracked": true,
+      "canAdd": false
+    }
+    // ... more pairs
+  ],
+  "totalAvailable": 150,
+  "currentlyTracked": 6,
+  "canAdd": 144,
+  "timestamp": 1674123456789
+}
+```
+
+**Response Fields:**
+- `pair`: Base currency symbol (e.g., "BTC")
+- `symbol`: Full trading pair symbol (e.g., "BTC/USDT")
+- `name`: Human-readable name (e.g., "Bitcoin")
+- `lastPrice`: Current price in USDT
+- `volume24h`: 24-hour trading volume
+- `change24h`: 24-hour price change percentage
+- `isActive`: Whether the pair is active on the exchange
+- `isTracked`: Whether this pair is currently being tracked
+- `canAdd`: Whether this pair can be added (not already tracked)
+
+### Persistent Storage Endpoints
 
 #### `GET /api/storage/stats`
-Get detailed storage statistics and file information
+Get storage statistics and file information
 ```json
 {
   "storage": {
@@ -149,37 +205,17 @@ Get detailed storage statistics and file information
 ```
 
 #### `POST /api/storage/save`
-Force save all current data to disk with atomic writes
+Force save all current data to disk
 ```bash
 curl -X POST http://localhost:3000/api/storage/save
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Data saved successfully with atomic writes",
-  "timestamp": 1674123456789
-}
-```
-
 #### `POST /api/storage/cleanup`
-Clean up old or corrupted data files
+Clean up old data files
 ```bash
 curl -X POST http://localhost:3000/api/storage/cleanup \
   -H "Content-Type: application/json" \
   -d '{"maxAgeHours": 168}'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Cleaned up 2 old data files",
-  "cleanedCount": 2,
-  "maxAgeHours": 168,
-  "timestamp": 1674123456789
-}
 ```
 
 ### Dynamic Pair Management Endpoints
@@ -376,18 +412,8 @@ npm run test:api          # Test API client
 npm run test:data         # Test data collection
 npm run test:strategies   # Test technical indicators
 npm run test:pairs        # Test dynamic pairs management
-npm run test:storage      # Test enhanced persistent storage
-npm run test:storage-diag # Diagnose and fix storage issues
-npm run test:debug-xmr    # Debug specific pair storage issues
-```
-
-### Storage Diagnostics
-```bash
-# Check for and clean up corrupted storage files
-npm run test:storage-diag
-
-# Debug specific storage issues
-npm run test:debug-xmr
+npm run test:storage      # Test persistent storage
+npm run test:available-pairs  # Test pair discovery
 ```
 
 ### Manual API Testing
@@ -398,11 +424,8 @@ curl http://localhost:3000/api/health
 # Get current configuration
 curl http://localhost:3000/api/config
 
-# Get enhanced storage statistics
-curl http://localhost:3000/api/storage/stats
-
-# Force save with atomic writes
-curl -X POST http://localhost:3000/api/storage/save
+# Discover available pairs
+curl http://localhost:3000/api/available-pairs
 
 # Add a trading pair
 curl -X POST http://localhost:3000/api/config/pairs/add \
@@ -453,13 +476,11 @@ The system starts with default pairs defined in `config/default.json`, but runti
 }
 ```
 
-### Enhanced Persistent Storage Configuration
+### Persistent Storage Configuration
 - **Storage Location**: `data/pairs/{pair}_history.json`
 - **Save Frequency**: Every 5 minutes (configurable)
 - **Auto-cleanup**: Files older than 7 days (configurable)
 - **Data Format**: JSON with metadata and full history arrays
-- **Atomic Writes**: Uses `.tmp` files then atomic renames
-- **Corruption Prevention**: Data validation and automatic cleanup
 
 ### Technical Indicators
 All indicators are configurable with custom periods and parameters. See individual indicator files in `src/strategies/technical/indicators/`.
@@ -471,26 +492,25 @@ All indicators are configurable with custom periods and parameters. See individu
 const CORE_API_URL = 'http://localhost:3000';
 
 class TradingBotCoreClient {
-    // Enhanced Storage Management
-    async getStorageStats() {
-        const response = await fetch(`${CORE_API_URL}/api/storage/stats`);
+    // Pair Discovery
+    async getAvailablePairs() {
+        const response = await fetch(`${CORE_API_URL}/api/available-pairs`);
         return response.json();
     }
     
-    async forceSave() {
-        const response = await fetch(`${CORE_API_URL}/api/storage/save`, {
-            method: 'POST'
-        });
-        return response.json();
+    async searchPairs(searchTerm) {
+        const data = await this.getAvailablePairs();
+        return data.availablePairs.filter(pair =>
+            pair.pair.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (pair.name && pair.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
     }
     
-    async cleanupOldData(maxAgeHours = 168) {
-        const response = await fetch(`${CORE_API_URL}/api/storage/cleanup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ maxAgeHours })
-        });
-        return response.json();
+    async getHighVolumePairs(minVolume = 100000) {
+        const data = await this.getAvailablePairs();
+        return data.availablePairs
+            .filter(pair => pair.volume24h > minVolume && pair.canAdd)
+            .sort((a, b) => b.volume24h - a.volume24h);
     }
     
     // Pair Management
@@ -500,15 +520,38 @@ class TradingBotCoreClient {
         return data.config.pairs;
     }
     
-    async addPair(pair) {
+    async addPairWithValidation(pairSymbol) {
+        // Check if pair is available first
+        const availableData = await this.getAvailablePairs();
+        const pairInfo = availableData.availablePairs.find(p => p.pair === pairSymbol.toUpperCase());
+        
+        if (!pairInfo) {
+            throw new Error(`Pair ${pairSymbol} is not available on Xeggex`);
+        }
+        
+        if (pairInfo.isTracked) {
+            throw new Error(`Pair ${pairSymbol} is already being tracked`);
+        }
+        
+        if (!pairInfo.isActive) {
+            throw new Error(`Pair ${pairSymbol} is not active on the exchange`);
+        }
+        
         const response = await fetch(`${CORE_API_URL}/api/config/pairs/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                pair: pair,
+                pair: pairSymbol,
                 updatedBy: 'dashboard'
             })
         });
+        
+        return response.json();
+    }
+    
+    // Storage Management
+    async getStorageStats() {
+        const response = await fetch(`${CORE_API_URL}/api/storage/stats`);
         return response.json();
     }
     
@@ -517,28 +560,17 @@ class TradingBotCoreClient {
         const response = await fetch(`${CORE_API_URL}/api/data`);
         return response.json();
     }
-    
-    async getPairAnalysis(pair) {
-        const response = await fetch(`${CORE_API_URL}/api/pair/${pair}`);
-        return response.json();
-    }
 }
 
 // Usage example
 const client = new TradingBotCoreClient();
 
-// Enhanced storage management
-const storageStats = await client.getStorageStats();
-await client.forceSave(); // Uses atomic writes
-await client.cleanupOldData(24); // Clean files older than 24 hours
+// Discover and add pairs
+const highVolumePairs = await client.getHighVolumePairs(50000);
+console.log('High volume pairs available:', highVolumePairs.slice(0, 5));
 
-// Dynamic pair management
-await client.addPair('BTC');
-const currentPairs = await client.getCurrentPairs();
-
-// Market data
-const marketData = await client.getMarketData();
-const btcAnalysis = await client.getPairAnalysis('BTC');
+await client.addPairWithValidation('BTC');
+await client.addPairWithValidation('ETH');
 ```
 
 ### Python
@@ -549,254 +581,113 @@ class TradingBotCoreClient:
     def __init__(self, core_api_url='http://localhost:3000'):
         self.core_api_url = core_api_url
     
-    # Enhanced Storage Management
-    def get_storage_stats(self):
-        response = requests.get(f'{self.core_api_url}/api/storage/stats')
+    # Pair Discovery
+    def get_available_pairs(self):
+        response = requests.get(f'{self.core_api_url}/api/available-pairs')
         return response.json()
     
-    def force_save(self):
-        response = requests.post(f'{self.core_api_url}/api/storage/save')
-        return response.json()
+    def search_pairs(self, search_term):
+        data = self.get_available_pairs()
+        return [
+            pair for pair in data['availablePairs']
+            if search_term.lower() in pair['pair'].lower() or 
+               (pair.get('name') and search_term.lower() in pair['name'].lower())
+        ]
     
-    def cleanup_old_data(self, max_age_hours=168):
-        response = requests.post(
-            f'{self.core_api_url}/api/storage/cleanup',
-            json={'maxAgeHours': max_age_hours}
-        )
-        return response.json()
+    def get_high_volume_pairs(self, min_volume=100000):
+        data = self.get_available_pairs()
+        pairs = [
+            pair for pair in data['availablePairs']
+            if pair.get('volume24h', 0) > min_volume and pair.get('canAdd', False)
+        ]
+        return sorted(pairs, key=lambda x: x.get('volume24h', 0), reverse=True)
     
     # Pair Management
-    def get_current_pairs(self):
-        response = requests.get(f'{self.core_api_url}/api/config')
-        return response.json()['config']['pairs']
-    
-    def add_pair(self, pair, updated_by='dashboard'):
+    def add_pair_with_validation(self, pair_symbol, updated_by='python_client'):
+        # Check availability first
+        available_data = self.get_available_pairs()
+        pair_info = next(
+            (p for p in available_data['availablePairs'] if p['pair'] == pair_symbol.upper()),
+            None
+        )
+        
+        if not pair_info:
+            raise ValueError(f'Pair {pair_symbol} is not available on Xeggex')
+        
+        if pair_info.get('isTracked'):
+            raise ValueError(f'Pair {pair_symbol} is already being tracked')
+        
+        if not pair_info.get('isActive', True):
+            raise ValueError(f'Pair {pair_symbol} is not active on the exchange')
+        
         response = requests.post(
             f'{self.core_api_url}/api/config/pairs/add',
-            json={'pair': pair, 'updatedBy': updated_by}
+            json={'pair': pair_symbol, 'updatedBy': updated_by}
         )
-        return response.json()
-    
-    # Market Data
-    def get_market_data(self):
-        response = requests.get(f'{self.core_api_url}/api/data')
         return response.json()
 
 # Usage example
 client = TradingBotCoreClient()
 
-# Enhanced storage management
-storage_stats = client.get_storage_stats()
-client.force_save()  # Uses atomic writes
-client.cleanup_old_data(24)  # Clean files older than 24 hours
+# Discover pairs
+btc_pairs = client.search_pairs('BTC')
+high_volume = client.get_high_volume_pairs(50000)
 
-# Dynamic pair management
-current_pairs = client.get_current_pairs()
-client.add_pair('BTC')
-
-# Market data
-market_data = client.get_market_data()
+# Add pairs with validation
+try:
+    result = client.add_pair_with_validation('BTC')
+    print(f"Added BTC: {result}")
+except ValueError as e:
+    print(f"Could not add BTC: {e}")
 ```
 
 ## 🏗️ Architecture & Design
 
-### Enhanced Data Processing with Persistent Storage
+### Event-Driven Data Processing with Pair Discovery
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                TRADING-BOT-CORE (Port 3000)                │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐│
-│  │   XeggexClient  │───▶│ MarketDataCollector │───▶│ TechnicalStrategies ││
-│  │                 │    │                 │    │                 ││
-│  │ • Rate Limiting │    │ • Dynamic Pairs │    │ • 11 Indicators ││
-│  │ • Health Checks │    │ • Smart Loading │    │ • Ensemble      ││
-│  │ • Error Retry   │    │ • Atomic Saves  │    │   Signals       ││
-│  │ • API Client    │    │ • Add/Remove    │    │ • Confidence    ││
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘│
-│                                 │                        │         │
-│  ┌─────────────────┐            │            ┌─────────────────┐    │
-│  │  ConfigManager  │◄───────────┼───────────►│   REST API      │    │
-│  │                 │            │            │   Server        │    │
-│  │ • Runtime Pairs │            │            │ • 14 Endpoints  │    │
-│  │ • Persistence   │            │            │ • JSON Responses││    │
-│  │ • Validation    │            │            │ • Error Handling││    │
-│  │ • Fallback      │            │            │ • CORS Support  │    │
-│  └─────────────────┘            │            └─────────────────┘    │
-│                                 │                             │
-│  ┌─────────────────┐            │            ┌─────────────────┐│
-│  │  DataStorage    │◄───────────┼───────────►│ Enhanced        ││
-│  │                 │            │            │ Storage Files   ││
-│  │ • Atomic Writes │            │            │ • JSON Format   ││
-│  │ • Validation    │            │            │ • Auto-cleanup  ││
-│  │ • Corruption    │            │            │ • Fast Access   ││
-│  │   Prevention    │            │            │ • Data Integrity││
-│  └─────────────────┘            │            └─────────────────┘│
-│                                 │                             │
-│  ┌─────────────────────────────────────────────────────────┐  │
-│  │     Enhanced Data Flow with Atomic Persistent Storage  │  │
-│  │  1. Load from files → 2. API fallback → 3. Real-time   │  │
-│  │  4. Atomic saves → 5. Sequential shutdown saves        │  │
-│  └─────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Xeggex API    │───▶│ MarketDataCollector │───▶│ TechnicalStrategies │
+│                 │    │                 │    │                 │
+│ • Market List   │    │ • Dynamic Pairs │    │ • 11 Indicators │
+│ • USDT Pairs    │    │ • Smart Loading │    │ • Ensemble      │
+│ • Pair Details  │    │ • Periodic Save │    │   Signals       │
+│ • Live Prices   │    │ • Add/Remove    │    │ • Confidence    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │                        │
+                       ┌─────────────────┐              ▼
+                       │  ConfigManager  │    ┌─────────────────┐
+                       │  (Runtime Pairs)│    │ Signal Generation│
+                       └─────────────────┘    └─────────────────┘
+                                │                        │
+                       ┌─────────────────┐              │
+                       │  DataStorage    │              │
+                       │(Persistent Files)│              │
+                       └─────────────────┘              │
+                                │                        │
+                                └────────┬───────────────┘
+                                         ▼
+                                ┌─────────────────┐
+                                │   REST API      │
+                                │ • 15 Endpoints  │
+                                │ • Pair Discovery│
+                                │ • Dynamic Pairs │
+                                │ • Storage Mgmt  │
+                                └─────────────────┘
 ```
 
-### Enhanced Data Flow with Atomic Writes
-1. **Startup**: Load from `data/pairs/{pair}_history.json` OR fetch from API if no local data
-2. **Real-time**: Collect new data every 5 minutes, add to memory
-3. **Atomic Saves**: Save to `.tmp` files, verify, then atomic rename every 5 minutes
-4. **Sequential Shutdown**: Save files one by one during graceful shutdown to prevent race conditions
-5. **Dynamic Pairs**: New pairs immediately get storage files, removed pairs optionally delete files
-6. **Corruption Prevention**: Automatic detection and cleanup of corrupted files
+### Data Flow with Pair Discovery
+1. **Discovery**: Query Xeggex API for all available USDT pairs
+2. **Validation**: Check pair availability, activity status, and current tracking
+3. **Selection**: Users can browse and select pairs to add
+4. **Addition**: Add new pairs with immediate data collection
+5. **Storage**: Persist configuration and start collecting historical data
+6. **Analysis**: Calculate technical indicators as data accumulates
 
-### Enhanced File Structure with Atomic Storage
-```
-trading-bot-core/
-├── config/
-│   ├── default.json          # Static default configuration
-│   └── runtime.json          # Dynamic runtime configuration (auto-created)
-├── data/
-│   └── pairs/                # Enhanced persistent storage directory (auto-created)
-│       ├── rvn_history.json      # Ravencoin historical data
-│       ├── rvn_history.json.tmp  # Temporary file during atomic writes
-│       ├── xmr_history.json      # Monero historical data (corruption-resistant)
-│       ├── bel_history.json      # Bella Protocol historical data
-│       ├── doge_history.json     # Dogecoin historical data
-│       ├── kas_history.json      # Kaspa historical data
-│       └── sal_history.json      # SalmonSwap historical data
-├── src/
-│   ├── utils/
-│   │   ├── ConfigManager.js       # Dynamic pair configuration management
-│   │   ├── DataStorage.js         # Enhanced persistent storage with atomic writes
-│   │   ├── Logger.js              # Winston logging
-│   │   └── index.js
-│   ├── data/collectors/
-│   │   ├── XeggexClient.js            # API client for Xeggex
-│   │   ├── MarketDataCollector.js     # Real-time data collection with enhanced storage
-│   │   └── index.js
-│   ├── strategies/
-│   │   └── technical/
-│   │       ├── TechnicalStrategies.js     # Main strategy engine
-│   │       ├── indicators/                # Individual indicator implementations
-│   │       │   ├── RSI.js
-│   │       │   ├── MACD.js
-│   │       │   ├── BollingerBands.js
-│   │       │   ├── MovingAverage.js
-│   │       │   ├── Volume.js
-│   │       │   ├── Stochastic.js
-│   │       │   ├── WilliamsR.js
-│   │       │   ├── IchimokuCloud.js
-│   │       │   ├── ADX.js
-│   │       │   ├── CCI.js
-│   │       │   ├── ParabolicSAR.js
-│   │       │   └── index.js
-│   │       └── index.js
-│   ├── server/
-│   │   └── ExpressApp.js                  # Express API server with enhanced endpoints
-│   └── main.js                            # Application entry point
-└── scripts/
-    ├── test-persistent-storage.js         # Test enhanced persistent storage
-    ├── test-storage-diagnostics.js        # Diagnose and fix storage issues
-    ├── test-debug-xmr.js                  # Debug specific pair storage issues
-    ├── test-dynamic-pairs.js              # Test dynamic pair management
-    ├── test-api-client.js                 # Test API client
-    ├── test-data-collector.js             # Test data collection
-    └── test-technical-strategies.js       # Test technical analysis
-```
+## 📊 Performance
 
-## 📊 Data Structures
-
-### Enhanced Storage File Format
-```javascript
-// Example: data/pairs/btc_history.json
-{
-  "pair": "BTC",
-  "lastUpdated": 1674123456789,
-  "dataPoints": 120,
-  "history": {
-    "closes": [45234.5, 45441.2, ...],     // Closing prices
-    "highs": [45445.0, 45550.0, ...],      // High prices
-    "lows": [45130.0, 45235.0, ...],       // Low prices  
-    "prices": [45234.5, 45441.2, ...],     // Same as closes (compatibility)
-    "volumes": [15420, 16830, ...],        // Trading volumes
-    "timestamps": [1672531200000, ...]     // Unix timestamps
-  }
-}
-```
-
-### Technical Indicator Response Format
-```javascript
-{
-  "value": 45.2,              // Primary indicator value
-  "suggestion": "hold",       // Trading suggestion: buy/sell/hold  
-  "confidence": 0.3,          // Confidence score (0-1)
-  "strength": 0.25,           // Signal strength (0-1)
-  "metadata": {               // Indicator-specific metadata
-    "period": 14,
-    "interpretation": "Neutral zone - no clear signal",
-    // ... additional indicator-specific fields
-  }
-}
-```
-
-### Configuration Format
-```javascript
-{
-  "pairs": ["BTC", "ETH", "XMR", "RVN"],
-  "lastUpdated": 1674123456789,
-  "updatedBy": "dashboard",
-  "totalPairs": 4
-}
-```
-
-## 🚨 Error Handling
-
-### API Error Responses
-```javascript
-// 404 - Pair not found
-{
-  "error": "Pair not found",
-  "pair": "INVALID",
-  "availablePairs": ["BTC", "ETH", "XMR", "RVN"],
-  "timestamp": 1672531200000
-}
-
-// 400 - Invalid request
-{
-  "error": "Invalid request",
-  "message": "pairs must be an array",
-  "timestamp": 1672531200000
-}
-
-// 500 - Internal server error
-{
-  "error": "Internal server error",
-  "message": "Calculation failed",
-  "timestamp": 1672531200000
-}
-```
-
-### Enhanced Storage Error Handling
-- **File Corruption Detection**: Automatic detection and cleanup of corrupted files
-- **Atomic Write Failures**: Rollback to previous state if atomic writes fail
-- **Data Validation Errors**: Prevent saving of invalid/empty data
-- **Permission Issues**: Clear error messages and fallback options
-- **Disk Space Issues**: Automatic cleanup of old files with configurable retention
-
-### Storage Diagnostic Tools
-```bash
-# Diagnose and fix storage issues
-npm run test:storage-diag
-
-# Debug specific pair issues
-npm run test:debug-xmr
-```
-
-## 📈 Performance
-
-### Enhanced Optimization Features
-- **Atomic File Operations**: Prevents corruption during writes with minimal performance impact
+### Optimization Features
+- **Smart Pair Discovery**: Cache available pairs for 5 minutes to reduce API calls
 - **Smart Data Loading**: Local storage first, API fallback only when needed
-- **Sequential Shutdown Saves**: Prevents race conditions while maintaining data integrity
 - **Periodic Saving**: Batched saves every 5 minutes for optimal I/O
 - **In-memory data storage** for fast indicator calculations
 - **Event-driven updates** to minimize unnecessary recalculations
@@ -806,21 +697,11 @@ npm run test:debug-xmr
 
 ### Performance Metrics
 - **Startup Time**: <5 seconds with local data, <30 seconds with API preload
-- **API Response Time**: <50ms average
+- **API Response Time**: <50ms average across all endpoints
+- **Pair Discovery**: <2 seconds to fetch all available pairs
 - **Memory Usage**: <512MB baseline, <1GB with full data retention
 - **Storage Efficiency**: ~1-5KB per pair per day of data
 - **Data Collection Success Rate**: 99%+ with automatic retry logic
-- **File Write Performance**: <100ms for atomic saves
-- **Corruption Rate**: <0.1% with enhanced validation and atomic writes
-
-### Monitoring
-- Real-time health checks via `/api/health`
-- Enhanced storage statistics via `/api/storage/stats`
-- Memory usage tracking in system stats
-- API request success/failure rates
-- Data collection statistics and error rates
-- Configuration change tracking
-- Storage file integrity monitoring
 
 ## 🔒 Security
 
@@ -829,6 +710,7 @@ npm run test:debug-xmr
 - Input validation for all parameters
 - Error message sanitization
 - Rate limiting on API endpoints
+- Pair validation against exchange data
 
 ### Data Security
 - API credentials stored in environment variables
@@ -836,18 +718,22 @@ npm run test:debug-xmr
 - Secure error handling without data leakage
 - Configuration file permissions
 - Local storage files with appropriate permissions
-- Atomic writes prevent data corruption during concurrent access
 
 ## ⚠️ Important Notes
 
-### Enhanced Storage Behavior
-1. **Atomic Writes**: System uses `.tmp` files and atomic renames to prevent corruption
-2. **Sequential Shutdown**: Files are saved one by one during shutdown to prevent race conditions
-3. **Data Integrity**: Files include validation metadata and timestamps
-4. **Automatic Cleanup**: Optional cleanup of files older than specified age
-5. **Graceful Degradation**: Falls back to API if storage fails
-6. **Performance**: Saves only every 5 minutes to optimize disk I/O
-7. **Corruption Prevention**: Automatic detection and cleanup of corrupted files
+### Pair Discovery Behavior
+1. **Live Data**: Available pairs are fetched live from Xeggex API
+2. **Caching**: Results cached briefly (5 minutes) for performance
+3. **Validation**: All pair additions validated against live exchange data
+4. **Format Handling**: Supports both "BTC/USDT" and "BTC_USDT" formats
+5. **Activity Status**: Only active pairs are recommended for addition
+
+### Persistent Storage Behavior
+1. **Smart Loading**: System tries local storage first, then API if no data exists
+2. **Data Integrity**: Files include validation metadata and timestamps
+3. **Automatic Cleanup**: Optional cleanup of files older than specified age
+4. **Graceful Degradation**: Falls back to API if storage fails
+5. **Performance**: Saves only every 5 minutes to optimize disk I/O
 
 ### Dynamic Pairs Behavior
 1. **Data Collection**: New pairs start collecting data immediately but need ~5 minutes for technical analysis
@@ -856,335 +742,40 @@ npm run test:debug-xmr
 4. **Fallback Mechanism**: If `runtime.json` is corrupted, system falls back to default pairs
 5. **Validation**: Invalid pair formats are rejected with detailed error messages
 
-### Performance Considerations
-- **Memory Usage**: Each pair stores up to 1440 data points (5 days at 5-minute intervals)
-- **Disk Usage**: ~1-5KB per pair per day, automatic cleanup available
-- **API Rate Limits**: Respects Xeggex rate limits (100 requests/minute)
-- **Real-time Updates**: Changes take effect immediately but full data collection may take minutes
-- **Concurrent Operations**: Multiple pair operations supported simultaneously
-- **Atomic Operations**: File writes are atomic to prevent corruption during concurrent access
+## 🤝 Contributing
 
-### Production Readiness Checklist
-- ✅ Handles API rate limits (100 requests/minute)
-- ✅ Graceful error handling and recovery
-- ✅ Memory management with data retention limits
-- ✅ Comprehensive logging for debugging
-- ✅ Health monitoring for service availability
-- ✅ PM2 configuration for process management
-- ✅ CORS headers for cross-service communication
-- ✅ Dynamic pair management without downtime
-- ✅ Enhanced persistent storage with atomic writes
-- ✅ Configuration validation and error handling
-- ✅ Fallback mechanisms for failed configurations
-- ✅ Storage management and cleanup utilities
-- ✅ Corruption prevention and automatic recovery
+### Adding New Features
+1. Follow existing code patterns and structure
+2. Add comprehensive tests for new functionality
+3. Update documentation and API examples
+4. Ensure backward compatibility
 
-## 🚨 Error Handling & Monitoring
+### Code Standards
+- ESLint configuration for consistent formatting
+- Comprehensive error handling required
+- JSDoc comments for all public methods
+- Unit tests for all new functionality
 
-### Enhanced Storage Monitoring
-The `/api/health` endpoint provides comprehensive storage health information:
-- Service status and uptime
-- API connectivity status  
-- Data collection statistics
-- Memory usage information
-- Indicator availability status
-- Current trading pairs and configuration status
-- Storage statistics and health
-- File integrity status
+## 📜 License
 
-### Logging Levels
-- **ERROR**: API failures, calculation errors, critical issues, configuration failures, storage errors, file corruption
-- **WARN**: Rate limit warnings, retry attempts, degraded performance, storage fallbacks, data validation issues
-- **INFO**: Service start/stop, data collection status, major events, pair updates, storage operations, atomic saves
-- **DEBUG**: Detailed calculation logs, API request details, configuration changes, storage operations, file operations
+ISC License - See LICENSE file for details.
 
-### Storage Diagnostics
-```bash
-# Run comprehensive storage diagnostics
-npm run test:storage-diag
+## 🔗 Related Repositories
 
-# Debug specific pair storage issues
-npm run test:debug-xmr
+- **[trading-bot-dashboard](https://github.com/makoshark2001/trading-bot-dashboard)** - Web interface with dynamic pair management and discovery
+- **[trading-bot-ml](https://github.com/makoshark2001/trading-bot-ml)** - Machine learning predictions  
+- **[trading-bot-backtest](https://github.com/makoshark2001/trading-bot-backtest)** - Strategy testing and validation
+- **[trading-bot-risk](https://github.com/makoshark2001/trading-bot-risk)** - Risk management and position sizing
+- **[trading-bot-execution](https://github.com/makoshark2001/trading-bot-execution)** - Trade execution and order management
 
-# Test enhanced storage functionality
-npm run test:storage
-```
+## 📞 Support
 
-## 🚫 What NOT to Add (Maintain Focus)
-
-This service should **NOT** include:
-- ❌ Machine learning models or predictions
-- ❌ Backtesting engines or strategy testing
-- ❌ Risk management calculations
-- ❌ Trade execution logic
-- ❌ User interfaces or dashboards
-- ❌ Portfolio management
-- ❌ Order placement functionality
-
-## ✅ Success Criteria (ALL MET)
-
-**✅ Core Functionality:**
-- Real-time data collection for configurable trading pairs
-- 11 technical indicators calculating correctly
-- Ensemble signal generation working
-- RESTful API serving all endpoints
-
-**✅ Dynamic Pair Management:**
-- Add/remove pairs without server restart
-- Persistent configuration with fallback
-- Real-time data collection for new pairs
-- Complete API for dashboard integration
-- Input validation and error handling
-
-**✅ Enhanced Persistent Storage:**
-- Smart data loading from local files with atomic writes
-- Automatic periodic saving with corruption prevention
-- Storage management APIs with diagnostics
-- Fast startup times with data continuity
-- Sequential shutdown saves to prevent race conditions
-
-**✅ Production Readiness:**
-- PM2 configuration for deployment
-- Comprehensive error handling
-- Health monitoring and logging
-- Performance optimized (<50ms response)
-- Dynamic configuration management
-- Storage optimization and cleanup
-- Corruption prevention and recovery
-
-**✅ Integration Ready:**
-- CORS enabled for cross-service communication
-- Standardized JSON API responses
-- Clear documentation for other services
-- Stable API endpoints for ecosystem integration
-- Dynamic pair management API for dashboards
-- Enhanced storage management API for monitoring
-
-## 🎯 Next Steps for Ecosystem
-
-With trading-bot-core complete including dynamic pairs and enhanced persistent storage, the ecosystem can now expand:
-
-1. **trading-bot-dashboard** - Web interface with dynamic pair management UI and enhanced storage monitoring
-2. **trading-bot-ml** - Machine learning service using technical analysis data
-3. **trading-bot-backtest** - Strategy testing using historical data with enhanced storage
-4. **trading-bot-risk** - Risk management using market data
-5. **trading-bot-execution** - Trade execution using signals
-
-## 📞 Support & Maintenance
-
-### Monitoring Commands
-```bash
-# Check service health
-curl http://localhost:3000/api/health
-
-# Check current configuration
-curl http://localhost:3000/api/config
-
-# Check enhanced storage statistics
-curl http://localhost:3000/api/storage/stats
-
-# Force atomic save
-curl -X POST http://localhost:3000/api/storage/save
-
-# Diagnose storage issues
-npm run test:storage-diag
-
-# View logs
-npm run pm2:logs
-
-# Check memory usage
-npm run pm2:status
-
-# Test dynamic pairs
-curl -X POST http://localhost:3000/api/config/pairs/add \
-  -H "Content-Type: application/json" \
-  -d '{"pair": "TEST"}'
-
-# Clean up old storage files
-curl -X POST http://localhost:3000/api/storage/cleanup \
-  -H "Content-Type: application/json" \
-  -d '{"maxAgeHours": 24}'
-```
-
-### Common Maintenance Tasks
-- Monitor API rate limits via health endpoint
-- Check data collection success rates
-- Review error logs for issues
-- Verify configuration file integrity
-- Test dynamic pair management functionality
-- Monitor enhanced storage usage and cleanup old files
-- Verify data persistence across restarts with atomic writes
-- Check for storage corruption and run diagnostics
-- Restart service if needed: `npm run pm2:restart`
-
-### Enhanced Configuration Management
-- **Runtime config location**: `config/runtime.json`
-- **Default config location**: `config/default.json`
-- **Enhanced storage location**: `data/pairs/{pair}_history.json`
-- **Atomic write process**: Uses `.tmp` files then renames
-- **Backup**: Runtime configuration is automatically backed up on changes
-- **Recovery**: Service falls back to default pairs if runtime config fails
-- **Storage recovery**: Falls back to API preload if storage files are corrupted
-
-### Storage Management
-- **Monitor disk usage**: Check `data/pairs/` directory size
-- **Cleanup old files**: Use `/api/storage/cleanup` endpoint
-- **Backup important data**: Consider backing up storage files
-- **Performance monitoring**: Watch for slow save/load operations
-- **Data integrity**: Verify file formats and run diagnostics
-- **Corruption prevention**: Automatic detection and cleanup of bad files
-
-### Performance Monitoring
-```bash
-# Monitor file system usage
-dir data\pairs /s
-
-# Check individual file sizes
-dir data\pairs
-
-# Monitor API response times (Windows)
-curl -w "@curl-format.txt" -o NUL -s http://localhost:3000/api/health
-
-# Test enhanced storage performance
-powershell "Measure-Command { curl -X POST http://localhost:3000/api/storage/save }"
-```
-
-### Troubleshooting Common Issues
-
-#### **Enhanced Storage Issues**
-```bash
-# Check if data directory exists
-dir data\pairs
-
-# Check file permissions and sizes
-dir data\pairs /a
-
-# Test enhanced storage manually
-node scripts/test-persistent-storage.js
-
-# Run storage diagnostics
-npm run test:storage-diag
-
-# Check for corrupted files
-node scripts/test-debug-xmr.js
-```
-
-#### **Configuration Issues**
-```bash
-# Check runtime config
-type config\runtime.json
-
-# Reset to defaults if corrupted
-curl -X POST http://localhost:3000/api/config/reset
-
-# Validate configuration format
-node -e "console.log(JSON.parse(require('fs').readFileSync('config/runtime.json')))"
-```
-
-#### **Performance Issues**
-```bash
-# Check memory usage
-curl http://localhost:3000/api/health
-
-# Monitor API response times
-curl -w "%{time_total}" -o NUL -s http://localhost:3000/api/pairs
-
-# Check enhanced storage stats
-curl http://localhost:3000/api/storage/stats
-```
-
-## 📊 File Structure Summary
-
-```
-trading-bot-core/
-├── config/
-│   ├── default.json              # Static configuration
-│   └── runtime.json              # Dynamic runtime config (auto-created)
-├── data/
-│   └── pairs/                    # Enhanced persistent storage (auto-created)
-│       ├── rvn_history.json          # Ravencoin data (corruption-resistant)
-│       ├── xmr_history.json          # Monero data (atomic writes)
-│       ├── bel_history.json          # Bella Protocol data
-│       ├── doge_history.json         # Dogecoin data
-│       ├── kas_history.json          # Kaspa data
-│       └── sal_history.json          # SalmonSwap data
-├── src/
-│   ├── utils/
-│   │   ├── ConfigManager.js           # Dynamic pair configuration
-│   │   ├── DataStorage.js             # Enhanced storage with atomic writes
-│   │   ├── Logger.js                  # Winston logging
-│   │   └── index.js
-│   ├── data/collectors/
-│   │   ├── XeggexClient.js            # API client
-│   │   ├── MarketDataCollector.js     # Data collection with enhanced storage
-│   │   └── index.js
-│   ├── strategies/technical/
-│   │   ├── TechnicalStrategies.js     # Strategy engine
-│   │   ├── indicators/                # 11 indicators
-│   │   └── index.js
-│   ├── server/
-│   │   └── ExpressApp.js              # API server (14 endpoints)
-│   └── main.js
-├── scripts/
-│   ├── test-persistent-storage.js     # Enhanced storage tests
-│   ├── test-storage-diagnostics.js    # Storage diagnostics and repair
-│   ├── test-debug-xmr.js              # Debug specific pair issues
-│   ├── test-dynamic-pairs.js          # Pair management tests
-│   ├── test-api-client.js             # API tests
-│   ├── test-data-collector.js         # Data collection tests
-│   └── test-technical-strategies.js   # Technical analysis tests
-├── logs/                              # Log files (auto-created)
-├── .env                               # Environment variables
-├── .gitignore                         # Git ignore (includes data/)
-├── package.json                       # Dependencies and scripts
-├── ecosystem.config.js                # PM2 configuration
-├── README.md                          # Complete documentation
-└── DEVELOPMENT_GUIDE.md               # Development guide
-```
-
-## 🎉 Completion Summary
-
-**✅ ALL MAJOR FEATURES IMPLEMENTED:**
-
-1. **Core Infrastructure** - Complete with 11 technical indicators
-2. **Dynamic Pair Management** - Runtime configuration without restarts
-3. **Enhanced Persistent Local Storage** - Smart loading, atomic writes, and corruption prevention
-4. **Production APIs** - 14 endpoints for all functionality
-5. **Comprehensive Testing** - Full test suite for all components including storage diagnostics
-6. **Production Deployment** - PM2 configuration and monitoring
-7. **Integration Ready** - Clear APIs for ecosystem services
-
-**🚀 ENHANCED PERFORMANCE ACHIEVED:**
-
-- **Startup Time**: <5 seconds with storage, 6x faster than API preload
-- **API Response**: <50ms average across all endpoints
-- **Data Reliability**: 99%+ collection success rate with corruption prevention
-- **Storage Efficiency**: Minimal disk usage with automatic cleanup and atomic writes
-- **Memory Usage**: <1GB with full data retention
-- **Error Recovery**: Comprehensive fallback mechanisms and corruption recovery
-
-**💾 ENHANCED STORAGE CAPABILITIES:**
-
-- **Atomic Writes**: Prevents corruption during file operations
-- **Sequential Shutdown**: Eliminates race conditions during server stop
-- **Smart Loading**: Local files first, API fallback when needed
-- **Data Continuity**: Survives server restarts with no data loss
-- **Performance**: Optimized periodic saves and fast startup
-- **Management**: APIs for monitoring, cleanup, and diagnostics
-- **Reliability**: Validation, corruption detection, and automatic recovery
-
-**⚡ DYNAMIC FEATURES:**
-
-- **Live Configuration**: Add/remove pairs via API
-- **Zero Downtime**: No restarts required for changes
-- **Event-Driven**: Real-time updates across all components
-- **Validation**: Input checking and error handling
-- **Persistence**: Configuration survives restarts
-
-The trading-bot-core service is now **production-ready** with all planned features implemented, enhanced storage capabilities, and thoroughly tested. It provides a solid foundation for the entire trading bot ecosystem with excellent performance, reliability, corruption prevention, and developer experience.
+For issues, questions, or contributions:
+- Create GitHub issues for bugs or feature requests
+- Check existing documentation before asking questions
+- Follow the contributing guidelines for pull requests
 
 ---
 
-**Trading Bot Core** - Foundation service providing market data collection, technical analysis, dynamic pair management, and enhanced persistent storage with atomic writes for the trading bot ecosystem.
-
-*Status: ✅ Production Ready with Enhanced Storage Features | Last Updated: June 2025*
+**Trading Bot Core API** - Market Data Collection & Technical Analysis Engine with Dynamic Pair Management, Persistent Storage & Automatic Pair Discovery  
+*Part of the Trading Bot Ecosystem*
