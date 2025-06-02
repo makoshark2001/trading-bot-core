@@ -1,6 +1,30 @@
 const EventEmitter = require('events');
-const { Logger } = require('../../utils');
 const { DataValidator } = require('../validators');
+const DataStorage = require('../../utils/DataStorage'); // Direct import
+const path = require('path');
+
+// Simple logger function to avoid import issues
+function log(level, message, data = {}) {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] MarketDataCollector ${level.toUpperCase()}: ${message}`, data);
+}
+
+function Logger(level) {
+    return {
+        info: (msg, data) => log('info', msg, data),
+        error: (msg, data) => log('error', msg, data),
+        debug: (msg, data) => {
+            // Reduce debug logging for cleaner output
+            if (msg.includes('calculated') || msg.includes('round completed') || msg.includes('Trimmed')) {
+                return; // Skip noisy debug messages
+            }
+            log('debug', msg, data);
+        },
+        warn: (msg, data) => log('warn', msg, data)
+    };
+}
+
+const logger = Logger();
 
 class MarketDataCollector extends EventEmitter {
     constructor(apiClient, config = {}) {
@@ -10,25 +34,31 @@ class MarketDataCollector extends EventEmitter {
             pairs: ["XMR","RVN", "BEL", "DOGE","KAS","SAL"],
             updateInterval: 300000, // 5 minutes
             dataRetention: 1440, // Keep 1440 data points (about 5 days at 5min intervals)
+            saveInterval: 300000, // Save to disk every 5 minutes
+            enablePersistence: true, // Enable persistent storage
             ...config
         };
         
         this.history = {};
         this.isCollecting = false;
         this.collectionInterval = null;
+        this.saveInterval = null;
+        this.dataStorage = new DataStorage();
         this.stats = {
             totalDataPoints: 0,
             successfulUpdates: 0,
             failedUpdates: 0,
-            lastUpdate: null
+            lastUpdate: null,
+            lastSave: null
         };
         
         this.setupEventHandlers();
         
-        Logger.info('MarketDataCollector initialized', {
+        logger.info('MarketDataCollector initialized', {
             pairs: this.config.pairs,
             updateInterval: this.config.updateInterval,
-            dataRetention: this.config.dataRetention
+            dataRetention: this.config.dataRetention,
+            persistenceEnabled: this.config.enablePersistence
         });
     }
     
@@ -44,33 +74,34 @@ class MarketDataCollector extends EventEmitter {
     }
     
     async initialize() {
-        Logger.info('Initializing market data collector...');
+        logger.info('Initializing market data collector...');
         
         try {
-            await this.preloadHistoricalData();
+            await this.loadOrPreloadHistoricalData();
             this.startRealTimeCollection();
+            this.startPeriodicSaving();
             
-            Logger.info('Market data collector initialized successfully', {
+            logger.info('Market data collector initialized successfully', {
                 totalPairs: this.config.pairs.length,
                 totalDataPoints: this.stats.totalDataPoints
             });
             
             this.emit('initialized');
         } catch (error) {
-            Logger.error('Failed to initialize market data collector', { error: error.message });
+            logger.error('Failed to initialize market data collector', { error: error.message });
             this.emit('initializationError', error);
             throw error;
         }
     }
     
-    async preloadHistoricalData() {
-        Logger.info('Preloading historical data...');
+    async loadOrPreloadHistoricalData() {
+        logger.info('Loading or preloading historical data...');
         
         for (const pair of this.config.pairs) {
             try {
-                await this.preloadSinglePair(pair);
+                await this.loadOrPreloadSinglePair(pair);
             } catch (error) {
-                Logger.error(`Error preloading data for ${pair}`, { 
+                logger.error(`Error loading/preloading data for ${pair}`, { 
                     pair, 
                     error: error.message 
                 });
@@ -78,16 +109,42 @@ class MarketDataCollector extends EventEmitter {
             }
         }
         
-        Logger.info('Historical data preload completed', {
+        logger.info('Historical data load/preload completed', {
             totalDataPoints: this.stats.totalDataPoints
         });
     }
     
-    async preloadSinglePair(pair) {
-        Logger.debug(`Preloading data for ${pair}...`);
+    async loadOrPreloadSinglePair(pair) {
+        logger.debug(`Processing data for ${pair}...`);
         
         this.initializeHistoryForPair(pair);
         
+        // Try to load from persistent storage first
+        if (this.config.enablePersistence) {
+            const storedData = await this.dataStorage.loadPairData(pair);
+            
+            if (storedData && storedData.closes && storedData.closes.length > 0) {
+                // Use stored data
+                this.history[pair] = storedData;
+                this.stats.totalDataPoints += storedData.closes.length;
+                
+                // Only log significant loads
+                logger.info(`📁 Loaded ${storedData.closes.length} stored data points for ${pair}`);
+                this.emit('dataLoaded', { 
+                    pair, 
+                    dataPoints: storedData.closes.length,
+                    source: 'storage'
+                });
+                return;
+            }
+        }
+        
+        // Fallback to API preload if no stored data
+        logger.info(`📡 No stored data found for ${pair}, preloading from API...`);
+        await this.preloadFromAPI(pair);
+    }
+    
+    async preloadFromAPI(pair) {
         const response = await this.apiClient.getCandles(`${pair}_USDT`, 5, 180);
         
         if (response.bars && Array.isArray(response.bars)) {
@@ -107,11 +164,17 @@ class MarketDataCollector extends EventEmitter {
                 }
             });
             
-            Logger.info(`Preloaded ${validBars} data points for ${pair}`);
+            // Save immediately after preloading from API
+            if (this.config.enablePersistence && validBars > 0) {
+                await this.dataStorage.savePairData(pair, this.history[pair]);
+            }
+            
+            logger.info(`📡 Preloaded ${validBars} data points from API for ${pair}`);
             this.emit('dataPreloaded', { 
                 pair, 
                 dataPoints: validBars,
-                totalPoints: this.history[pair].closes.length 
+                totalPoints: this.history[pair].closes.length,
+                source: 'api'
             });
         }
     }
@@ -127,19 +190,19 @@ class MarketDataCollector extends EventEmitter {
                 timestamps: []
             };
             
-            Logger.debug(`Initialized history for ${pair}`);
+            logger.debug(`Initialized history for ${pair}`);
         }
     }
     
     addDataPoint(pair, data, emitEvent = true) {
         if (!DataValidator.isValidPriceData(data)) {
-            Logger.warn(`Invalid data for ${pair}`, { data });
+            logger.warn(`Invalid data for ${pair}`, { data });
             return false;
         }
         
         const history = this.history[pair];
         if (!history) {
-            Logger.error(`No history initialized for ${pair}`);
+            logger.error(`No history initialized for ${pair}`);
             return false;
         }
         
@@ -158,12 +221,7 @@ class MarketDataCollector extends EventEmitter {
         this.stats.lastUpdate = new Date();
         
         if (emitEvent) {
-            Logger.debug(`New data point added for ${pair}`, {
-                price: data.close,
-                volume: data.volume,
-                timestamp: new Date(data.timestamp).toISOString()
-            });
-            
+            // Remove the debug logging for every data point to reduce noise
             this.emit('newData', { pair, data });
         }
         
@@ -179,21 +237,22 @@ class MarketDataCollector extends EventEmitter {
                 const removedCount = history[key].length - maxLength;
                 history[key] = history[key].slice(-maxLength);
                 
-                if (removedCount > 0) {
-                    Logger.debug(`Trimmed ${removedCount} old data points for ${pair}.${key}`);
-                }
+                // Remove noisy trim logging
+                // if (removedCount > 0) {
+                //     logger.debug(`Trimmed ${removedCount} old data points for ${pair}.${key}`);
+                // }
             }
         });
     }
     
     startRealTimeCollection() {
         if (this.isCollecting) {
-            Logger.warn('Real-time collection already running');
+            logger.warn('Real-time collection already running');
             return;
         }
         
         this.isCollecting = true;
-        Logger.info('Starting real-time data collection', {
+        logger.info('Starting real-time data collection', {
             interval: this.config.updateInterval,
             pairs: this.config.pairs
         });
@@ -208,8 +267,55 @@ class MarketDataCollector extends EventEmitter {
         this.emit('collectionStarted');
     }
     
+    startPeriodicSaving() {
+        if (!this.config.enablePersistence) {
+            logger.debug('Persistent storage disabled, skipping periodic saves');
+            return;
+        }
+        
+        logger.info('Starting periodic data saving', {
+            interval: this.config.saveInterval
+        });
+        
+        this.saveInterval = setInterval(async () => {
+            await this.saveAllPairData();
+        }, this.config.saveInterval);
+    }
+    
+    async saveAllPairData() {
+        if (!this.config.enablePersistence) {
+            return;
+        }
+        
+        try {
+            // Remove the debug log about starting save
+            let savedCount = 0;
+            
+            for (const pair of this.config.pairs) {
+                if (this.history[pair] && this.history[pair].closes.length > 0) {
+                    const success = await this.dataStorage.savePairData(pair, this.history[pair]);
+                    if (success) {
+                        savedCount++;
+                    }
+                }
+            }
+            
+            this.stats.lastSave = new Date();
+            
+            // Only log saves when manually triggered or significant
+            if (savedCount > 0) {
+                logger.debug(`💾 Saved data for ${savedCount} pairs`);
+            }
+            
+            this.emit('dataSaved', { savedCount });
+            
+        } catch (error) {
+            logger.error('Failed to save pair data', { error: error.message });
+        }
+    }
+    
     async collectCurrentData() {
-        Logger.debug('Collecting current market data...');
+        // Remove debug log for every collection round
         
         const promises = this.config.pairs.map(pair => this.fetchCurrentData(pair));
         const results = await Promise.allSettled(promises);
@@ -222,17 +328,20 @@ class MarketDataCollector extends EventEmitter {
                 successful++;
             } else {
                 failed++;
-                Logger.error(`Failed to fetch data for ${this.config.pairs[index]}`, {
+                logger.error(`Failed to fetch data for ${this.config.pairs[index]}`, {
                     error: result.reason?.message
                 });
             }
         });
         
-        Logger.debug(`Data collection round completed`, {
-            successful,
-            failed,
-            total: this.config.pairs.length
-        });
+        // Only log collection results if there are failures
+        if (failed > 0) {
+            logger.debug(`Data collection round completed`, {
+                successful,
+                failed,
+                total: this.config.pairs.length
+            });
+        }
         
         this.emit('collectionRoundComplete', { successful, failed });
     }
@@ -256,7 +365,7 @@ class MarketDataCollector extends EventEmitter {
                 throw new Error('Invalid response format');
             }
         } catch (error) {
-            Logger.error(`Error fetching current data for ${pair}`, {
+            logger.error(`Error fetching current data for ${pair}`, {
                 pair,
                 error: error.message
             });
@@ -268,28 +377,25 @@ class MarketDataCollector extends EventEmitter {
     // Dynamic pair management methods
     async addPair(pair) {
         if (this.config.pairs.includes(pair)) {
-            Logger.warn(`Pair ${pair} already exists in configuration`);
+            logger.warn(`Pair ${pair} already exists in configuration`);
             return false;
         }
         
         try {
-            Logger.info(`Adding new trading pair: ${pair}`);
+            logger.info(`Adding new trading pair: ${pair}`);
             
             // Add to config
             this.config.pairs.push(pair);
             
-            // Initialize history for new pair
-            this.initializeHistoryForPair(pair);
+            // Load or preload data for new pair
+            await this.loadOrPreloadSinglePair(pair);
             
-            // Preload historical data for new pair
-            await this.preloadSinglePair(pair);
-            
-            Logger.info(`Successfully added trading pair: ${pair}`);
+            logger.info(`Successfully added trading pair: ${pair}`);
             this.emit('pairAdded', { pair });
             
             return true;
         } catch (error) {
-            Logger.error(`Failed to add pair ${pair}`, { error: error.message });
+            logger.error(`Failed to add pair ${pair}`, { error: error.message });
             // Remove from config if it was added
             this.config.pairs = this.config.pairs.filter(p => p !== pair);
             throw error;
@@ -298,12 +404,12 @@ class MarketDataCollector extends EventEmitter {
     
     async removePair(pair) {
         if (!this.config.pairs.includes(pair)) {
-            Logger.warn(`Pair ${pair} not found in configuration`);
+            logger.warn(`Pair ${pair} not found in configuration`);
             return false;
         }
         
         try {
-            Logger.info(`Removing trading pair: ${pair}`);
+            logger.info(`Removing trading pair: ${pair}`);
             
             // Remove from config
             this.config.pairs = this.config.pairs.filter(p => p !== pair);
@@ -311,19 +417,24 @@ class MarketDataCollector extends EventEmitter {
             // Remove history
             delete this.history[pair];
             
-            Logger.info(`Successfully removed trading pair: ${pair}`);
+            // Optionally delete stored data (comment out if you want to keep files)
+            if (this.config.enablePersistence) {
+                await this.dataStorage.deletePairData(pair);
+            }
+            
+            logger.info(`Successfully removed trading pair: ${pair}`);
             this.emit('pairRemoved', { pair });
             
             return true;
         } catch (error) {
-            Logger.error(`Failed to remove pair ${pair}`, { error: error.message });
+            logger.error(`Failed to remove pair ${pair}`, { error: error.message });
             throw error;
         }
     }
     
     async updatePairs(newPairs) {
         try {
-            Logger.info('Updating trading pairs configuration', {
+            logger.info('Updating trading pairs configuration', {
                 oldPairs: this.config.pairs,
                 newPairs
             });
@@ -335,29 +446,28 @@ class MarketDataCollector extends EventEmitter {
             // Remove pairs that are no longer needed
             for (const pair of removed) {
                 delete this.history[pair];
-                Logger.debug(`Removed history for ${pair}`);
+                // Optionally delete stored data
+                if (this.config.enablePersistence) {
+                    await this.dataStorage.deletePairData(pair);
+                }
+                logger.debug(`Removed history for ${pair}`);
             }
             
             // Update config
             this.config.pairs = [...newPairs];
             
-            // Initialize history for new pairs
-            for (const pair of added) {
-                this.initializeHistoryForPair(pair);
-            }
-            
-            // Preload historical data for new pairs
+            // Load or preload data for new pairs
             for (const pair of added) {
                 try {
-                    await this.preloadSinglePair(pair);
+                    await this.loadOrPreloadSinglePair(pair);
                 } catch (error) {
-                    Logger.error(`Failed to preload data for new pair ${pair}`, {
+                    logger.error(`Failed to load/preload data for new pair ${pair}`, {
                         error: error.message
                     });
                 }
             }
             
-            Logger.info('Successfully updated trading pairs', {
+            logger.info('Successfully updated trading pairs', {
                 added,
                 removed,
                 totalPairs: newPairs.length
@@ -375,7 +485,7 @@ class MarketDataCollector extends EventEmitter {
             };
             
         } catch (error) {
-            Logger.error('Failed to update trading pairs', { error: error.message });
+            logger.error('Failed to update trading pairs', { error: error.message });
             throw error;
         }
     }
@@ -403,27 +513,45 @@ class MarketDataCollector extends EventEmitter {
         };
     }
     
+    async getStorageStats() {
+        return await this.dataStorage.getStorageStats();
+    }
+    
     // Control methods
     pause() {
         if (this.collectionInterval) {
             clearInterval(this.collectionInterval);
             this.collectionInterval = null;
         }
+        
+        if (this.saveInterval) {
+            clearInterval(this.saveInterval);
+            this.saveInterval = null;
+        }
+        
         this.isCollecting = false;
         
-        Logger.info('Market data collection paused');
+        logger.info('Market data collection paused');
         this.emit('collectionPaused');
     }
     
     resume() {
         if (!this.isCollecting) {
             this.startRealTimeCollection();
+            this.startPeriodicSaving();
         }
     }
     
-    stop() {
+    async stop() {
         this.pause();
-        Logger.info('Market data collection stopped');
+        
+        // Save all data before stopping
+        if (this.config.enablePersistence) {
+            await this.saveAllPairData();
+            logger.info('💾 Final data save completed');
+        }
+        
+        logger.info('Market data collection stopped');
         this.emit('collectionStopped');
     }
     
@@ -431,6 +559,17 @@ class MarketDataCollector extends EventEmitter {
     hasEnoughDataForAnalysis(pair, minDataPoints = 52) {
         const history = this.getHistoryForPair(pair);
         return history && history.closes && history.closes.length >= minDataPoints;
+    }
+    
+    // Manual save trigger
+    async forceSave() {
+        await this.saveAllPairData();
+        logger.info('💾 Manual data save completed');
+    }
+    
+    // Clean up old stored files
+    async cleanupOldData(maxAgeHours = 168) {
+        return await this.dataStorage.cleanupOldData(maxAgeHours);
     }
 }
 

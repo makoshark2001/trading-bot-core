@@ -1,7 +1,7 @@
 {
   "name": "trading-bot-core",
   "version": "2.0.0",
-  "description": "Core infrastructure for Advanced Trading Bot - Data Collection & Technical Analysis with Dynamic Pair Management",
+  "description": "Core infrastructure for Advanced Trading Bot - Data Collection & Technical Analysis with Dynamic Pair Management and Persistent Storage",
   "repository": {
     "type": "git",
     "url": "https://github.com/makoshark2001/trading-bot-core"
@@ -16,7 +16,8 @@
     "test:data": "node scripts/test-data-collector.js",
     "test:strategies": "node scripts/test-technical-strategies.js",
     "test:pairs": "node scripts/test-dynamic-pairs.js",
-    "test:all": "npm run test:setup && npm run test:api && npm run test:data && npm run test:strategies && npm run test:pairs",
+    "test:storage": "node scripts/test-persistent-storage.js",
+    "test:all": "npm run test:setup && npm run test:api && npm run test:storage && npm run test:data && npm run test:strategies && npm run test:pairs",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop trading-bot-core",
     "pm2:restart": "pm2 restart trading-bot-core",
@@ -41,7 +42,8 @@
     "xeggex",
     "core",
     "indicators",
-    "dynamic-pairs"
+    "dynamic-pairs",
+    "persistent-storage"
   ],
   "author": "HTMauney",
   "license": "ISC",

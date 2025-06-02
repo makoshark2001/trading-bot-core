@@ -11,7 +11,9 @@
   "trading": {
     "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
     "dataRetention": 1440,
-    "updateInterval": 300000
+    "updateInterval": 300000,
+    "saveInterval": 300000,
+    "enablePersistence": true
   },
   "server": {
     "port": 3000,
@@ -19,6 +21,16 @@
   },
   "logging": {
     "level": "info",
-    "file": "logs/app.log"
+    "file": "logs/app.log",
+    "storage": {
+      "enabled": true,
+      "level": "info",
+      "debugOperations": false
+    }
+  },
+  "storage": {
+    "enabled": true,
+    "cleanupMaxAge": 168,
+    "autoCleanup": true
   }
 }

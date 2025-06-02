@@ -83,7 +83,7 @@ class TradingBotServer {
             res.json({
                 service: 'Trading Bot Core API',
                 version: '2.0.0',
-                description: 'Market data collection and technical analysis engine with dynamic pair management',
+                description: 'Market data collection and technical analysis engine with dynamic pair management and persistent storage',
                 endpoints: {
                     health: '/api/health',
                     data: '/api/data',
@@ -93,11 +93,21 @@ class TradingBotServer {
                     updatePairs: 'PUT /api/config/pairs',
                     addPair: 'POST /api/config/pairs/add',
                     removePair: 'DELETE /api/config/pairs/:pair',
-                    reset: 'POST /api/config/reset'
+                    reset: 'POST /api/config/reset',
+                    storageStats: '/api/storage/stats',
+                    forceSave: 'POST /api/storage/save',
+                    cleanup: 'POST /api/storage/cleanup'
                 },
                 indicators: [
                     'RSI', 'MACD', 'Bollinger Bands', 'Moving Average', 'Volume Analysis',
                     'Stochastic', 'Williams %R', 'Ichimoku Cloud', 'ADX', 'CCI', 'Parabolic SAR'
+                ],
+                features: [
+                    'Real-time data collection',
+                    'Dynamic pair management', 
+                    'Persistent local storage',
+                    '11 technical indicators',
+                    'Ensemble signal generation'
                 ],
                 documentation: 'https://github.com/makoshark2001/trading-bot-core'
             });
@@ -464,6 +474,65 @@ class TradingBotServer {
                 });
                 res.status(500).json({
                     error: 'Internal server error',
+                    timestamp: Date.now()
+                });
+            }
+        });
+
+        // Add these new endpoints after the existing API routes in ExpressApp.js
+
+        // Storage management endpoints
+        this.app.get('/api/storage/stats', async (req, res) => {
+            try {
+                const stats = await this.dataCollector.getStorageStats();
+                res.json({
+                    storage: stats,
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                Logger.error('Error getting storage stats', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to get storage statistics',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+
+        this.app.post('/api/storage/save', async (req, res) => {
+            try {
+                await this.dataCollector.forceSave();
+                res.json({
+                    success: true,
+                    message: 'Data saved successfully',
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                Logger.error('Error forcing save', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to save data',
+                    message: error.message,
+                    timestamp: Date.now()
+                });
+            }
+        });
+
+        this.app.post('/api/storage/cleanup', async (req, res) => {
+            try {
+                const { maxAgeHours = 168 } = req.body; // Default 7 days
+                const cleanedCount = await this.dataCollector.cleanupOldData(maxAgeHours);
+                res.json({
+                    success: true,
+                    message: `Cleaned up ${cleanedCount} old data files`,
+                    cleanedCount,
+                    maxAgeHours,
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                Logger.error('Error cleaning up data', { error: error.message });
+                res.status(500).json({
+                    error: 'Failed to cleanup data',
+                    message: error.message,
                     timestamp: Date.now()
                 });
             }
