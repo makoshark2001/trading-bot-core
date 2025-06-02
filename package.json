@@ -17,6 +17,8 @@
     "test:strategies": "node scripts/test-technical-strategies.js",
     "test:pairs": "node scripts/test-dynamic-pairs.js",
     "test:storage": "node scripts/test-persistent-storage.js",
+    "test:storage-diag": "node scripts/test-storage-diagnostics.js",
+    "test:debug-xmr": "node scripts/debug-xmr-issue.js",
     "test:all": "npm run test:setup && npm run test:api && npm run test:storage && npm run test:data && npm run test:strategies && npm run test:pairs",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop trading-bot-core",

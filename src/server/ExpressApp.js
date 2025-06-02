@@ -479,8 +479,6 @@ class TradingBotServer {
             }
         });
 
-        // Add these new endpoints after the existing API routes in ExpressApp.js
-
         // Storage management endpoints
         this.app.get('/api/storage/stats', async (req, res) => {
             try {
@@ -554,7 +552,10 @@ class TradingBotServer {
                     'PUT /api/config/pairs',
                     'POST /api/config/pairs/add',
                     'DELETE /api/config/pairs/:pair',
-                    'POST /api/config/reset'
+                    'POST /api/config/reset',
+                    'GET /api/storage/stats',
+                    'POST /api/storage/save',
+                    'POST /api/storage/cleanup'
                 ],
                 timestamp: Date.now()
             });
@@ -691,15 +692,25 @@ class TradingBotServer {
     async stop() {
         Logger.info('Stopping Trading Bot Core API Server...');
         
-        if (this.dataCollector) {
-            this.dataCollector.stop();
+        try {
+            if (this.dataCollector) {
+                Logger.info('💾 Stopping data collector and saving final data...');
+                await this.dataCollector.stop();
+                Logger.info('✅ Data collector stopped and data saved');
+            }
+            
+            if (this.server) {
+                Logger.info('🔌 Closing HTTP server...');
+                await new Promise((resolve) => {
+                    this.server.close(resolve);
+                });
+                Logger.info('✅ HTTP server closed');
+            }
+            
+            Logger.info('✅ Trading Bot Core API Server stopped gracefully');
+        } catch (error) {
+            Logger.error('❌ Error during server shutdown', { error: error.message });
         }
-        
-        if (this.server) {
-            this.server.close();
-        }
-        
-        Logger.info('Trading Bot Core API Server stopped');
     }
 }
 

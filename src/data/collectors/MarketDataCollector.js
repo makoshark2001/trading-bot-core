@@ -121,27 +121,92 @@ class MarketDataCollector extends EventEmitter {
         
         // Try to load from persistent storage first
         if (this.config.enablePersistence) {
-            const storedData = await this.dataStorage.loadPairData(pair);
-            
-            if (storedData && storedData.closes && storedData.closes.length > 0) {
-                // Use stored data
-                this.history[pair] = storedData;
-                this.stats.totalDataPoints += storedData.closes.length;
+            try {
+                const storedData = await this.dataStorage.loadPairData(pair);
                 
-                // Only log significant loads
-                logger.info(`📁 Loaded ${storedData.closes.length} stored data points for ${pair}`);
-                this.emit('dataLoaded', { 
-                    pair, 
-                    dataPoints: storedData.closes.length,
-                    source: 'storage'
+                if (storedData && storedData.closes && storedData.closes.length > 0) {
+                    // Additional validation for stored data
+                    if (this.validateStoredData(storedData, pair)) {
+                        // Use stored data
+                        this.history[pair] = storedData;
+                        this.stats.totalDataPoints += storedData.closes.length;
+                        
+                        logger.info(`📁 Loaded ${storedData.closes.length} stored data points for ${pair}`);
+                        this.emit('dataLoaded', { 
+                            pair, 
+                            dataPoints: storedData.closes.length,
+                            source: 'storage'
+                        });
+                        return;
+                    } else {
+                        logger.warn(`📁 Stored data for ${pair} failed validation, falling back to API`);
+                    }
+                }
+            } catch (storageError) {
+                logger.error(`📁 Error loading stored data for ${pair}`, { 
+                    error: storageError.message 
                 });
-                return;
             }
         }
         
-        // Fallback to API preload if no stored data
-        logger.info(`📡 No stored data found for ${pair}, preloading from API...`);
+        // Fallback to API preload if no stored data or validation failed
+        logger.info(`📡 No valid stored data found for ${pair}, preloading from API...`);
         await this.preloadFromAPI(pair);
+    }
+    
+    validateStoredData(data, pair) {
+        try {
+            if (!data || typeof data !== 'object') {
+                logger.warn(`Invalid stored data structure for ${pair} - not object`);
+                return false;
+            }
+            
+            const { closes, highs, lows, volumes, timestamps } = data;
+            
+            if (!closes || !Array.isArray(closes) || closes.length === 0) {
+                logger.warn(`Invalid stored data for ${pair} - missing/empty closes`);
+                return false;
+            }
+            
+            // Check for valid numbers in closes array
+            for (let i = 0; i < Math.min(closes.length, 5); i++) {
+                if (typeof closes[i] !== 'number' || !isFinite(closes[i]) || closes[i] <= 0) {
+                    logger.warn(`Invalid price data in stored file for ${pair}`, { 
+                        sampleValue: closes[i],
+                        index: i 
+                    });
+                    return false;
+                }
+            }
+            
+            // Check array length consistency
+            if (highs && highs.length !== closes.length) {
+                logger.warn(`Array length mismatch for ${pair} - highs`);
+                return false;
+            }
+            
+            if (lows && lows.length !== closes.length) {
+                logger.warn(`Array length mismatch for ${pair} - lows`);
+                return false;
+            }
+            
+            if (volumes && volumes.length !== closes.length) {
+                logger.warn(`Array length mismatch for ${pair} - volumes`);
+                return false;
+            }
+            
+            if (timestamps && timestamps.length !== closes.length) {
+                logger.warn(`Array length mismatch for ${pair} - timestamps`);
+                return false;
+            }
+            
+            logger.debug(`✅ Stored data validation passed for ${pair}`);
+            return true;
+            
+        } catch (error) {
+            logger.error(`Error validating stored data for ${pair}`, { error: error.message });
+            return false;
+        }
     }
     
     async preloadFromAPI(pair) {
@@ -545,10 +610,69 @@ class MarketDataCollector extends EventEmitter {
     async stop() {
         this.pause();
         
-        // Save all data before stopping
+        // Save all data before stopping with extra validation
         if (this.config.enablePersistence) {
-            await this.saveAllPairData();
-            logger.info('💾 Final data save completed');
+            logger.info('💾 Starting final data save before shutdown...');
+            
+            const savePromises = [];
+            
+            for (const pair of this.config.pairs) {
+                if (this.history[pair] && this.history[pair].closes && this.history[pair].closes.length > 0) {
+                    logger.debug(`💾 Saving ${pair} - ${this.history[pair].closes.length} data points`);
+                    
+                    // Create individual promise for each pair to avoid race conditions
+                    const savePromise = this.dataStorage.savePairData(pair, this.history[pair])
+                        .then(success => {
+                            if (success) {
+                                logger.debug(`✅ Successfully saved ${pair} during shutdown`);
+                            } else {
+                                logger.error(`❌ Failed to save ${pair} during shutdown`);
+                            }
+                            return { pair, success };
+                        })
+                        .catch(error => {
+                            logger.error(`❌ Error saving ${pair} during shutdown`, { error: error.message });
+                            return { pair, success: false, error: error.message };
+                        });
+                    
+                    savePromises.push(savePromise);
+                } else {
+                    logger.warn(`⚠️  Skipping save for ${pair} - no valid data`, {
+                        hasHistory: !!this.history[pair],
+                        hasCloses: !!(this.history[pair] && this.history[pair].closes),
+                        closesLength: this.history[pair] && this.history[pair].closes ? this.history[pair].closes.length : 0
+                    });
+                }
+            }
+            
+            if (savePromises.length > 0) {
+                logger.info(`💾 Waiting for ${savePromises.length} files to save...`);
+                
+                try {
+                    const results = await Promise.allSettled(savePromises);
+                    let successCount = 0;
+                    let failCount = 0;
+                    
+                    results.forEach((result, index) => {
+                        if (result.status === 'fulfilled' && result.value.success) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                            const pair = this.config.pairs[index];
+                            logger.error(`💾 Failed to save ${pair}`, { 
+                                status: result.status,
+                                error: result.reason || (result.value && result.value.error)
+                            });
+                        }
+                    });
+                    
+                    logger.info(`💾 Final data save completed - ${successCount} successful, ${failCount} failed`);
+                } catch (error) {
+                    logger.error('💾 Error during final save', { error: error.message });
+                }
+            } else {
+                logger.warn('💾 No data to save during shutdown');
+            }
         }
         
         logger.info('Market data collection stopped');
