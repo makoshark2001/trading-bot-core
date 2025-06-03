@@ -9,7 +9,7 @@
     }
   },
   "trading": {
-    "pairs": ["XMR", "RVN", "BEL", "DOGE", "KAS", "SAL"],
+    "pairs": ["BTC"],
     "dataRetention": 1440,
     "updateInterval": 300000,
     "saveInterval": 300000,

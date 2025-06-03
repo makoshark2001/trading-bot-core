@@ -1,12 +1,6 @@
 {
   "trading": {
     "pairs": [
-      "XMR",
-      "RVN",
-      "BEL",
-      "DOGE",
-      "KAS",
-      "SAL",
       "BTC"
     ],
     "lastUpdated": 1748845713321,
