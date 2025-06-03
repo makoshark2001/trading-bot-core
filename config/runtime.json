@@ -1,7 +1,19 @@
 {
   "trading": {
     "pairs": [
-      "RVN"
+      "BTC",
+      "ETH",
+      "KAS",
+      "DOGE",
+      "RVN",
+      "BEL",
+      "KCN",
+      "OCTA",
+      "ALPH",
+      "TRX",
+      "ERG",
+      "SAL",
+      "XMR"
     ],
     "lastUpdated": 1748845713321,
     "updatedBy": "dashboard"
