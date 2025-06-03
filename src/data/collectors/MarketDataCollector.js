@@ -151,27 +151,7 @@ class MarketDataCollector extends EventEmitter {
         
         // Fallback to API preload if no stored data or validation failed
         logger.info(`📡 No valid stored data found for ${pair}, preloading from API...`);
-        //await this.preloadFromAPI(pair);
-        try {
-            const data = await this.fetchCurrentData(pair);
-            if (data) {
-                this.stats.totalDataPoints++;
-                if (this.config.enablePersistence && data) {
-                    await this.dataStorage.savePairData(pair, this.history[pair]);
-                }
-                logger.info(`📡 Fetched current data point for ${pair}`);
-                this.emit('dataLoaded', { 
-                    pair, 
-                    dataPoints: 1,
-                    source: 'api'
-                });
-            }
-        } catch (error) {
-            logger.error(`📡 Error fetching current data for ${pair}`, { 
-                error: error.message 
-            });
-            this.emit('fetchError', { pair, error });
-        }
+        await this.preloadFromAPI(pair);
     }
     
     validateStoredData(data, pair) {
@@ -248,11 +228,6 @@ class MarketDataCollector extends EventEmitter {
                     validBars++;
                 }
             });
-            
-            // Save immediately after preloading from API
-            if (this.config.enablePersistence && validBars > 0) {
-                await this.dataStorage.savePairData(pair, this.history[pair]);
-            }
             
             logger.info(`📡 Preloaded ${validBars} data points from API for ${pair}`);
             this.emit('dataPreloaded', { 
