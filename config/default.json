@@ -9,7 +9,7 @@
     }
   },
   "trading": {
-    "pairs": ["BTC"],
+    "pairs": ["RVN"],
     "dataRetention": 1440,
     "updateInterval": 300000,
     "saveInterval": 300000,
