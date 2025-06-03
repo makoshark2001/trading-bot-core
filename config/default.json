@@ -12,7 +12,7 @@
     "pairs": ["RVN"],
     "dataRetention": 1440,
     "updateInterval": 60000,
-    "saveInterval": 60000,
+    "saveInterval": 300000,
     "enablePersistence": true
   },
   "server": {
