@@ -11,8 +11,8 @@
   "trading": {
     "pairs": ["RVN"],
     "dataRetention": 1440,
-    "updateInterval": 300000,
-    "saveInterval": 300000,
+    "updateInterval": 60000,
+    "saveInterval": 60000,
     "enablePersistence": true
   },
   "server": {
